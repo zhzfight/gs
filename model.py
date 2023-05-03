@@ -230,7 +230,7 @@ class TransformerModel(nn.Module):
         self.decoder_poi.weight.data.uniform_(-initrange, initrange)
 
     def forward(self, src, src_mask):
-        #src = src * math.sqrt(self.embed_size)
+        src = src * math.sqrt(self.embed_size)
         src = self.pos_encoder(src)
         x = self.transformer_encoder(src, src_mask)
         out_poi = self.decoder_poi(x)
@@ -366,7 +366,7 @@ class SageLayer(nn.Module):
         feats = torch.cat((self_feats, adj_feats, dis_feats), dim=-1) + self.bias
         feats=self.WC(feats)
         feats = self.leakyRelu(feats)
-        #feats = F.normalize(feats, p=2, dim=-1)
+        feats = F.normalize(feats, p=2, dim=-1)
 
         nodes_idx=[unique_nodes[int(node)] for node in nodes]
         res=feats[nodes_idx]
