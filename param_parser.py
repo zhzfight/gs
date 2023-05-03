@@ -68,7 +68,7 @@ def parameter_parser():
 
     parser.add_argument('--poi-embed-dim',
                         type=int,
-                        default=600,
+                        default=300,
                         help='sage embedding dimensions')
     parser.add_argument('--user-embed-dim',
                         type=int,
@@ -88,7 +88,7 @@ def parameter_parser():
                         help='List of hidden dims for gcn layers')
     parser.add_argument('--transformer-nhid',
                         type=int,
-                        default=1024,
+                        default=512,
                         help='Hid dim in TransformerEncoder')
     parser.add_argument('--transformer-nlayers',
                         type=int,

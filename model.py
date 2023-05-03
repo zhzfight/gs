@@ -371,7 +371,7 @@ class SageLayer(nn.Module):
         nodes_idx=[unique_nodes[int(node)] for node in nodes]
         res=feats[nodes_idx]
         endtime=time.time()
-        print('layer ',self.id,' ',start_time-endtime)
+        print('layer ',self.id,' ',endtime-start_time)
         return res
 
 
