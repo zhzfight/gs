@@ -262,7 +262,7 @@ def train(args):
                     break
             print(self.adjOrdis, self.id, 'quit')
 
-    threshold = 200  # 队列大小阈值
+    threshold = 10  # 队列大小阈值
     adj_queues = {node: multiprocessing.Queue() for node in range(num_pois)}  # 创建多个队列
     dis_queues = {node: multiprocessing.Queue() for node in range(num_pois)}  # 创建多个队列
     tasks = split_list([i for i in range(num_pois)],int(args.cpus/2))
