@@ -248,9 +248,10 @@ def train(args):
                 for node in self.tasks:
                     q = self.queues[node]
                     if q.qsize() < threshold:
-                        random_walk = random_walk_with_restart(self.adj_list, node, self.restart_prob, self.num_walks,
+                        for _ in range(threshold-q.qsize()):
+                            random_walk = random_walk_with_restart(self.adj_list, node, self.restart_prob, self.num_walks,
                                                                self.adjOrdis)
-                        q.put(random_walk)
+                            q.put(random_walk)
                         missing_count += 1
                 if missing_count < 5:
                     time.sleep(0.5)
