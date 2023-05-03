@@ -13,8 +13,12 @@ def parameter_parser():
     parser = argparse.ArgumentParser(description="Run GETNext.")
     parser.add_argument('--seed',
                         type=int,
-                        default=42,
+                        default=33,
                         help='Random seed')
+    parser.add_argument('--cpus',
+                        type=int,
+                        default=8,
+                        help='num of cpu')
     parser.add_argument('--device',
                         type=str,
                         default=device,
@@ -24,6 +28,18 @@ def parameter_parser():
                         type=str,
                         default='dataset/NYC/graph_A.csv',
                         help='Graph adjacent path')
+    parser.add_argument('--geo-dis',
+                        type=int,
+                        default=750,
+                        help='geo distance less than geo_dis regarded as context poi')
+    parser.add_argument('--restart-prob',
+                        type=float,
+                        default=0.5,
+                        help='random walk with restart prob')
+    parser.add_argument('--num-walks',
+                        type=int,
+                        default=99,
+                        help='random walk with restart step')
     parser.add_argument('--data-node-feats',
                         type=str,
                         default='dataset/NYC/graph_X.csv',
@@ -49,11 +65,11 @@ def parameter_parser():
                         default='norm_in_day_time',
                         help='The name of time feature in the data')
 
-    # Model hyper-parameters
-    parser.add_argument('--poi-embed-dim',
+
+    parser.add_argument('--sage-embed-dim',
                         type=int,
-                        default=128,
-                        help='POI embedding dimensions')
+                        default=240,
+                        help='sage embedding dimensions')
     parser.add_argument('--user-embed-dim',
                         type=int,
                         default=128,
@@ -62,6 +78,10 @@ def parameter_parser():
                         type=float,
                         default=0.3,
                         help='Dropout rate for gcn')
+    parser.add_argument('--sage-dropout',
+                        type=float,
+                        default=0.1,
+                        help='Dropout rate for sage')
     parser.add_argument('--gcn-nhid',
                         type=list,
                         default=[32, 64],
@@ -90,6 +110,10 @@ def parameter_parser():
                         type=int,
                         default=32,
                         help='Category embedding dimensions')
+    parser.add_argument('--adj-path',
+                        type=str,
+                        default='./dataset',
+                        help='adj_list path')
     parser.add_argument('--time-loss-weight',
                         type=int,
                         default=10,
@@ -114,7 +138,7 @@ def parameter_parser():
                         help='Initial learning rate.')
     parser.add_argument('--lr-scheduler-factor',
                         type=float,
-                        default=0.1,
+                        default=0.01,
                         help='Learning rate scheduler factor')
     parser.add_argument('--weight_decay',
                         type=float,

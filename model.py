@@ -4,6 +4,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn import Parameter
+from utils import sample_neighbors
+import queue
 
 
 class NodeAttnMap(nn.Module):
@@ -227,10 +229,185 @@ class TransformerModel(nn.Module):
         self.decoder_poi.weight.data.uniform_(-initrange, initrange)
 
     def forward(self, src, src_mask):
-        src = src * math.sqrt(self.embed_size)
+        #src = src * math.sqrt(self.embed_size)
         src = self.pos_encoder(src)
         x = self.transformer_encoder(src, src_mask)
         out_poi = self.decoder_poi(x)
         out_time = self.decoder_time(x)
         out_cat = self.decoder_cat(x)
         return out_poi, out_time, out_cat
+
+
+
+class MeanAggregator(nn.Module):
+    """
+    Aggregates a node's embeddings using mean of neighbors' embeddings and transform
+    """
+
+    def __init__(self, id2feat, device):
+        """
+        features -- function mapping LongTensor of node ids to FloatTensor of feature values.
+        cuda -- whether to use GPU
+        """
+        super(MeanAggregator, self).__init__()
+        self.id2feat = id2feat
+        self.device = device
+
+    def forward(self, to_neighs):
+        """
+        nodes --- list of nodes in a batch
+        dis --- shape alike adj
+        to_neighs --- list of sets, each set is the set of neighbors for node in batch
+        num_sample --- number of neighbors to sample. No sampling if None.
+        """
+        tmp = [n for x in to_neighs for n in x]
+        unique_nodes_list = set(tmp)
+        unique_nodes = {n: i for i, n in enumerate(unique_nodes_list)}
+        mask = torch.zeros(len(to_neighs), len(unique_nodes_list)).to(self.device)
+        column_indices = [unique_nodes[n] for n in tmp]
+        row_indices = [i for i in range(len(to_neighs)) for j in range(len(to_neighs[i]))]
+        for x, y in zip(row_indices, column_indices):
+            mask[x, y] += 1
+
+        num_neigh = mask.sum(1, keepdim=True)
+        mask = mask.div(num_neigh)
+
+        embed_matrix = self.id2feat(
+            torch.LongTensor(list(unique_nodes_list)).to(self.device))  # （unique_count, feat_dim)
+        to_feats = mask.mm(embed_matrix)  # n * embed_dim
+        return to_feats  # n * embed_dim
+
+
+class SageLayer(nn.Module):
+    """
+    Encodes a node's using 'convolutional' GraphSage approach
+    id2feat -- function mapping LongTensor of node ids to FloatTensor of feature values.
+    cuda -- whether to use GPU
+    gcn --- whether to perform concatenation GraphSAGE-style, or add self-loops GCN-style
+    """
+
+    def __init__(self, id2feat, adj_list, dis_list, restart_prob, num_walks, input_dim, output_dim, device, dropout,
+                 id,adj_queues,dis_queues):
+        super(SageLayer, self).__init__()
+        self.id2feat = id2feat
+        self.dis_agg = MeanAggregator(self.id2feat, device)
+        self.adj_agg = MeanAggregator(self.id2feat, device)
+        self.device = device
+        self.adj_list = adj_list
+        self.dis_list = dis_list
+        self.restart_prob = restart_prob
+        self.num_walks = num_walks
+        self.leakyRelu = nn.LeakyReLU(0.2)
+        self.dropout = dropout
+        self.adj_queues=adj_queues
+        self.dis_queues=dis_queues
+        self.id=id
+        self.W_self = nn.Linear(input_dim, int(output_dim / 3), bias=False)
+        self.W_adj = nn.Linear(input_dim, int(output_dim / 3), bias=False)
+        self.W_dis = nn.Linear(input_dim, int(output_dim / 3), bias=False)
+        self.WC=nn.Linear(output_dim,output_dim)
+        self.bias = nn.Parameter(torch.FloatTensor(output_dim))
+        self.init_weights()
+        self.buffer={}
+
+    def init_weights(self):
+        initrange = 0.1
+        self.W_self.weight.data.uniform_(-initrange, initrange)
+        self.W_adj.weight.data.uniform_(-initrange, initrange)
+        self.W_dis.weight.data.uniform_(-initrange, initrange)
+        self.bias.data.zero_()
+    def reset_buffer(self):
+        self.buffer.clear()
+
+    def forward(self, nodes):
+        """
+        Generates embeddings for a batch of nodes.
+        nodes     -- list of nodes
+        """
+
+
+        if self.id!=1:
+            unique_nodes_list = list(set([int(node) for node in nodes]).difference(self.buffer.keys()))
+        else:
+            unique_nodes_list = list(set([int(node) for node in nodes]))
+            unique_nodes = {n: i for i, n in enumerate(unique_nodes_list)}
+
+        adj_neighbors=[[] for _ in unique_nodes_list]
+        dis_neighbors=[[] for _ in unique_nodes_list]
+        missing_adj_idx=[]
+        missing_dis_idx=[]
+        for idx,node in enumerate(unique_nodes_list):
+            try:
+                random_walk=self.adj_queues[node].get_nowait()
+                adj_neighbors[idx]=random_walk
+            except queue.Empty:
+                missing_adj_idx.append(idx)
+            try:
+                random_walk=self.dis_queues[node].get_nowait()
+                dis_neighbors[idx]=random_walk
+            except queue.Empty:
+                missing_dis_idx.append(idx)
+
+        if len(missing_adj_idx)!=0:
+            missing_adj_neighbors=sample_neighbors(self.adj_list,[unique_nodes_list[i] for i in missing_adj_idx],self.restart_prob,self.num_walks,'adj')
+            for idx,missing_adj_neighbor in zip(missing_adj_idx,missing_adj_neighbors):
+                adj_neighbors[idx]=missing_adj_neighbor
+        if len(missing_dis_idx)!=0:
+            missing_dis_neighbors=sample_neighbors(self.dis_list,[unique_nodes_list[i] for i in missing_dis_idx],self.restart_prob,self.num_walks,'dis')
+            for idx,missing_dis_neighbor in zip(missing_dis_idx,missing_dis_neighbors):
+                dis_neighbors[idx]=missing_dis_neighbor
+
+        self_feats = self.id2feat(torch.tensor(unique_nodes_list).to(self.device))
+        adj_feats = self.adj_agg(adj_neighbors)
+        dis_feats = self.dis_agg(dis_neighbors)
+        adj_feats = self.W_adj(adj_feats)
+        self_feats = self.W_self(self_feats)
+        self_feats = F.dropout(self_feats, p=self.dropout, training=self.training)
+        dis_feats = self.W_dis(dis_feats)
+        feats = torch.cat((self_feats, adj_feats, dis_feats), dim=-1) + self.bias
+        feats=self.WC(feats)
+        feats = self.leakyRelu(feats)
+        #feats = F.normalize(feats, p=2, dim=-1)
+        self.buffer.update(zip(unique_nodes_list,feats))
+
+        res = []
+        if self.id!=1:
+            for node in nodes:
+                res.append(self.buffer[int(node)])
+        else:
+            for node in nodes:
+                res.append(feats[unique_nodes[int(node)]])
+        res = torch.stack(res, dim=0)
+
+        return res
+
+
+class GraphSage(nn.Module):
+    def __init__(self, X, num_node, embed_dim, adj, dis, device, restart_prob, num_walks, dropout, workers,adj_queues,dis_queues):
+        super(GraphSage, self).__init__()
+        self.id2node = X
+        self.device = device
+        '''
+        self.layer1 = SageLayer(id2feat=lambda nodes: self.id2node[nodes], adj_list=adj, dis_list=dis,
+                                restart_prob=restart_prob, num_walks=num_walks, input_dim=X.shape[1],output_dim=embed_dim, device=device,
+                                dropout=dropout,workers=workers,pool=self.pool)
+        self.layer2 = SageLayer(id2feat=lambda nodes: self.layer1(nodes), adj_list=adj, dis_list=dis,
+                                restart_prob=restart_prob, num_walks=num_walks,input_dim=embed_dim,
+                                output_dim=embed_dim, device=device, dropout=dropout,workers=workers,pool=self.pool)
+        self.layer3 = SageLayer(id2feat=lambda nodes: self.layer2(nodes), adj_list=adj, dis_list=dis,
+                                restart_prob=restart_prob, num_walks=num_walks,input_dim=embed_dim,
+                                output_dim=embed_dim, device=device, dropout=dropout,workers=workers,pool=self.pool)
+        '''
+
+        self.layer2 = SageLayer(id2feat=lambda nodes: self.id2node[nodes], adj_list=adj, dis_list=dis,
+                                restart_prob=restart_prob, num_walks=num_walks, input_dim=X.shape[1],
+                                output_dim=embed_dim, device=device, dropout=dropout, id=2,adj_queues=adj_queues,dis_queues=dis_queues)
+        self.layer1 = SageLayer(id2feat=lambda nodes: self.layer2(nodes), adj_list=adj, dis_list=dis,
+                                restart_prob=restart_prob, num_walks=num_walks, input_dim=embed_dim,
+                                output_dim=embed_dim, device=device, dropout=dropout,id=1,adj_queues=adj_queues,dis_queues=dis_queues)
+
+    def forward(self, nodes):
+        feats = self.layer1(nodes)
+        return feats
+    def reset_buffer(self):
+        self.layer2.reset_buffer()
