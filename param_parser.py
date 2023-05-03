@@ -66,7 +66,7 @@ def parameter_parser():
                         help='The name of time feature in the data')
 
 
-    parser.add_argument('--sage-embed-dim',
+    parser.add_argument('--poi-embed-dim',
                         type=int,
                         default=240,
                         help='sage embedding dimensions')
