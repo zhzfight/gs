@@ -14,6 +14,30 @@ import random
 
 
 geod = Geodesic.WGS84
+
+def split_list_by_ratio(lst, ratios):
+    # 检查比例列表是否加起来等于1，如果不是，抛出异常
+    if sum(ratios) != 1:
+        raise ValueError("The sum of ratios must be 1")
+    # 计算列表的长度
+    n = len(lst)
+    # 初始化一个空列表，用来存放划分后的子列表
+    result = []
+    # 初始化一个变量，用来记录当前划分的位置
+    start = 0
+    # 遍历比例列表
+    for ratio in ratios:
+        # 计算当前比例对应的元素个数，四舍五入到整数
+        size = round(n * ratio)
+        # 切片列表，得到当前比例对应的子列表
+        sublist = lst[start:start + size]
+        # 将子列表添加到结果列表中
+        result.append(sublist)
+        # 更新划分的位置
+        start += size
+    # 返回结果列表
+    return result
+
 def callback(result):
     if isinstance(result, Exception):
         # 如果结果是一个异常对象，那么打印异常信息

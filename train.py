@@ -24,7 +24,8 @@ from model import GCN, NodeAttnMap, UserEmbeddings, Time2Vec, CategoryEmbeddings
     GraphSage
 from param_parser import parameter_parser
 from utils import increment_path, calculate_laplacian_matrix, zipdir, top_k_acc_last_timestep, \
-    mAP_metric_last_timestep, MRR_metric_last_timestep, maksed_mse_loss, adj_list, split_list, random_walk_with_restart
+    mAP_metric_last_timestep, MRR_metric_last_timestep, maksed_mse_loss, adj_list, split_list, random_walk_with_restart,\
+    split_list_by_ratio
 
 
 def train(args):
@@ -244,7 +245,6 @@ def train(args):
 
         def run(self):
             while True:
-                missing_count = 0
                 for node in self.tasks:
                     q = self.queues[node]
                     if q.qsize() < threshold:
@@ -252,9 +252,6 @@ def train(args):
                             random_walk = random_walk_with_restart(self.adj_list, node, self.restart_prob, self.num_walks,
                                                                self.adjOrdis)
                             q.put(random_walk)
-                        missing_count += 1
-                if missing_count < 5:
-                    time.sleep(0.5)
                 if self.stop_event.is_set():
                     break
             print(self.adjOrdis, self.id, 'quit')
@@ -262,7 +259,7 @@ def train(args):
     threshold = 40  # 队列大小阈值
     adj_queues = {node: multiprocessing.Queue() for node in range(num_pois)}  # 创建多个队列
     dis_queues = {node: multiprocessing.Queue() for node in range(num_pois)}  # 创建多个队列
-    tasks = split_list([i for i in range(num_pois)], int(args.cpus/2))
+    tasks = split_list_by_ratio([i for i in range(num_pois)], [0.1,0.4,0.2,0.3])
     stop_event = multiprocessing.Event()
 
     for idx, task in enumerate(tasks):
