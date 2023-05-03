@@ -281,7 +281,7 @@ def train(args):
     X = X.to(device=args.device, dtype=torch.float)
     A = A.to(device=args.device, dtype=torch.float)
 
-    poi_embed_model = GraphSage(X=X, num_node=num_pois, embed_dim=args.poi_embed_dim, adj=adj, dis=dis,
+    poi_embed_model = GraphSage(X=X,  embed_dim=args.poi_embed_dim, adj=adj, dis=dis,
                                 device=args.device, restart_prob=args.restart_prob, num_walks=args.num_walks,
                                 dropout=args.dropout, adj_queues=adj_queues, dis_queues=dis_queues)
 

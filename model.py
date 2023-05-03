@@ -383,7 +383,7 @@ class SageLayer(nn.Module):
 
 
 class GraphSage(nn.Module):
-    def __init__(self, X, num_node, embed_dim, adj, dis, device, restart_prob, num_walks, dropout, workers,adj_queues,dis_queues):
+    def __init__(self, X,  embed_dim, adj, dis, device, restart_prob, num_walks, dropout,adj_queues,dis_queues):
         super(GraphSage, self).__init__()
         self.id2node = X
         self.device = device
