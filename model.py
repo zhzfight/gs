@@ -367,7 +367,7 @@ class SageLayer(nn.Module):
         feats = self.leakyRelu(feats)
         #feats = F.normalize(feats, p=2, dim=-1)
 
-        nodes_idx=[unique_nodes[node] for node in nodes]
+        nodes_idx=[unique_nodes[int(node)] for node in nodes]
         res=feats[nodes_idx]
 
         return res
