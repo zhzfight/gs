@@ -242,16 +242,22 @@ def train(args):
             self.adj_list = adj_list
             self.restart_prob = restart_prob
             self.num_walks = num_walks
+            self.count_dict={key:threshold for key in tasks}
+            self.missing_dict={key:0 for key in tasks}
 
         def run(self):
             while True:
                 for node in self.tasks:
                     q = self.queues[node]
-                    if q.qsize() < threshold:
-                        for _ in range(threshold-q.qsize()):
+                    if q.qsize() < self.threshold/2:
+                        for _ in range(self.count_dict[node]-q.qsize()):
                             random_walk = random_walk_with_restart(self.adj_list, node, self.restart_prob, self.num_walks,
                                                                self.adjOrdis)
                             q.put(random_walk)
+                        self.missing_dict[node]+=1
+                        if self.missing_dict[node]>2:
+                            self.missing_dict[node]=0
+                            self.count_dict[node]+=self.threshold
                 if self.stop_event.is_set():
                     break
             print(self.adjOrdis, self.id, 'quit')
