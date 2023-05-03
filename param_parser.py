@@ -78,7 +78,7 @@ def parameter_parser():
                         type=float,
                         default=0.3,
                         help='Dropout rate for gcn')
-    parser.add_argument('--sage-dropout',
+    parser.add_argument('--dropout',
                         type=float,
                         default=0.1,
                         help='Dropout rate for sage')
