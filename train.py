@@ -265,7 +265,7 @@ def train(args):
     threshold = 200  # 队列大小阈值
     adj_queues = {node: multiprocessing.Queue() for node in range(num_pois)}  # 创建多个队列
     dis_queues = {node: multiprocessing.Queue() for node in range(num_pois)}  # 创建多个队列
-    tasks = split_list_by_ratio([i for i in range(num_pois)], [0.1,0.4,0.5])
+    tasks = split_list([i for i in range(num_pois)],int(args.cpu/2))
     stop_event = multiprocessing.Event()
 
     for idx, task in enumerate(tasks):
