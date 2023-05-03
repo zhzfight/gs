@@ -326,11 +326,9 @@ class SageLayer(nn.Module):
         """
 
 
-        if self.id!=1:
-            unique_nodes_list = list(set([int(node) for node in nodes]).difference(self.buffer.keys()))
-        else:
-            unique_nodes_list = list(set([int(node) for node in nodes]))
-            unique_nodes = {n: i for i, n in enumerate(unique_nodes_list)}
+
+        unique_nodes_list = list(set([int(node) for node in nodes]))
+        unique_nodes = {n: i for i, n in enumerate(unique_nodes_list)}
 
         adj_neighbors=[[] for _ in unique_nodes_list]
         dis_neighbors=[[] for _ in unique_nodes_list]
@@ -368,16 +366,9 @@ class SageLayer(nn.Module):
         feats=self.WC(feats)
         feats = self.leakyRelu(feats)
         #feats = F.normalize(feats, p=2, dim=-1)
-        self.buffer.update(zip(unique_nodes_list,feats))
 
-        res = []
-        if self.id!=1:
-            for node in nodes:
-                res.append(self.buffer[int(node)])
-        else:
-            for node in nodes:
-                res.append(feats[unique_nodes[int(node)]])
-        res = torch.stack(res, dim=0)
+        nodes_idx=[unique_nodes[node] for node in nodes]
+        res=feats[nodes_idx]
 
         return res
 
