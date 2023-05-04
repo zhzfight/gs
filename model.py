@@ -322,7 +322,6 @@ class SageLayer(nn.Module):
         Generates embeddings for a batch of nodes.
         nodes     -- list of nodes
         """
-
         start_time=time.time()
 
         unique_nodes_list = list(set([int(node) for node in nodes]))
@@ -356,7 +355,7 @@ class SageLayer(nn.Module):
         self_feats = self.id2feat(torch.tensor(unique_nodes_list).to(self.device))
         adj_feats = self.adj_agg(adj_neighbors)
         dis_feats = self.dis_agg(dis_neighbors)
-        start_time = time.time()
+
         adj_feats = self.W_adj(adj_feats)
         self_feats = self.W_self(self_feats)
         self_feats = F.dropout(self_feats, p=self.dropout, training=self.training)
