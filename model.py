@@ -267,8 +267,8 @@ class MeanAggregator(nn.Module):
         mask = torch.zeros(len(to_neighs), len(unique_nodes_list)).to(self.device)
         column_indices = [unique_nodes[n] for n in tmp]
         row_indices = [i for i in range(len(to_neighs)) for j in range(len(to_neighs[i]))]
-        for x, y in zip(row_indices, column_indices):
-            mask[x, y] += 1
+
+        mask[row_indices, column_indices] += 1
 
         num_neigh = mask.sum(1, keepdim=True)
         mask = mask.div(num_neigh)
