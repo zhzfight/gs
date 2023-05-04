@@ -210,7 +210,7 @@ class TransformerModel(nn.Module):
         from torch.nn import TransformerEncoder, TransformerEncoderLayer
         self.model_type = 'Transformer'
         self.pos_encoder = PositionalEncoding(embed_size, dropout)
-        encoder_layers = TransformerEncoderLayer(embed_size, nhead, nhid, dropout,batch_first=True)
+        encoder_layers = TransformerEncoderLayer(embed_size, nhead, nhid, dropout)
         self.transformer_encoder = TransformerEncoder(encoder_layers, nlayers)
         # self.encoder = nn.Embedding(num_poi, embed_size)
         self.embed_size = embed_size
@@ -230,9 +230,11 @@ class TransformerModel(nn.Module):
         self.decoder_poi.weight.data.uniform_(-initrange, initrange)
 
     def forward(self, src, src_mask):
+        src=torch.transpose(src,1,0)
         src = src * math.sqrt(self.embed_size)
         src = self.pos_encoder(src)
         x = self.transformer_encoder(src, src_mask)
+        x=torch.transpose(x,1,0)
         out_poi = self.decoder_poi(x)
         out_time = self.decoder_time(x)
         out_cat = self.decoder_cat(x)
