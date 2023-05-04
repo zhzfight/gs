@@ -346,7 +346,9 @@ class SageLayer(nn.Module):
                 dis_neighbors[idx]=random_walk
             except queue.Empty:
                 missing_dis_idx.append(idx)
-
+        endtime = time.time()
+        print('layer ', self.id, 'wait sample neighbor ', endtime - start_time)
+        start_time = time.time()
         if len(missing_adj_idx)!=0:
             missing_adj_neighbors=sample_neighbors(self.adj_list,[unique_nodes_list[i] for i in missing_adj_idx],self.restart_prob,self.num_walks,'adj')
             for idx,missing_adj_neighbor in zip(missing_adj_idx,missing_adj_neighbors):
@@ -355,10 +357,21 @@ class SageLayer(nn.Module):
             missing_dis_neighbors=sample_neighbors(self.dis_list,[unique_nodes_list[i] for i in missing_dis_idx],self.restart_prob,self.num_walks,'dis')
             for idx,missing_dis_neighbor in zip(missing_dis_idx,missing_dis_neighbors):
                 dis_neighbors[idx]=missing_dis_neighbor
-
+        endtime = time.time()
+        print('layer ', self.id, 'sample by self ', endtime - start_time)
+        start_time = time.time()
         self_feats = self.id2feat(torch.tensor(unique_nodes_list).to(self.device))
+        endtime = time.time()
+        print('layer ', self.id, ' ', endtime - start_time)
+        start_time = time.time()
         adj_feats = self.adj_agg(adj_neighbors)
+        endtime = time.time()
+        print('layer ', self.id, ' ', endtime - start_time)
+        start_time = time.time()
         dis_feats = self.dis_agg(dis_neighbors)
+        endtime = time.time()
+        print('layer ', self.id, ' ', endtime - start_time)
+        start_time = time.time()
         adj_feats = self.W_adj(adj_feats)
         self_feats = self.W_self(self_feats)
         self_feats = F.dropout(self_feats, p=self.dropout, training=self.training)
