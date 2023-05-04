@@ -450,6 +450,7 @@ def train(args):
             pois = [each[0] for sample in batch for each in sample[1]]
             poi_embeddings = poi_embed_model(torch.tensor(pois).to(args.device))
             # Convert input seq to embeddings
+            start_time=time.time()
             embedding_index=0
             for sample in batch:
                 # sample[0]: traj_id, sample[1]: input_seq, sample[2]: label_seq
@@ -492,6 +493,8 @@ def train(args):
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+            endtime = time.time()
+            print('calculate ',  endtime - start_time)
 
             # Performance measurement
             top1_acc = 0
