@@ -277,6 +277,9 @@ def train(args):
                                   num_walks=args.num_walks,
                                   threshold=threshold, adjOrdis='dis', stop_event=stop_event, id=idx)
         dp.start()
+    print('wait 120')
+    time.sleep(120)
+    print('ok start')
     # %% ====================== Build Models ======================
     # Model1: POI embedding model
     if isinstance(X, np.ndarray):
