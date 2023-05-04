@@ -126,7 +126,7 @@ def parameter_parser():
     # Training hyper-parameters
     parser.add_argument('--batch',
                         type=int,
-                        default=20,
+                        default=40,
                         help='Batch size.')
     parser.add_argument('--epochs',
                         type=int,
@@ -134,7 +134,7 @@ def parameter_parser():
                         help='Number of epochs to train.')
     parser.add_argument('--lr',
                         type=float,
-                        default=0.001,
+                        default=0.01,
                         help='Initial learning rate.')
     parser.add_argument('--lr-scheduler-factor',
                         type=float,
