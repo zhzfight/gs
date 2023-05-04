@@ -442,11 +442,11 @@ def train(args):
         train_batches_poi_loss_list = []
         train_batches_time_loss_list = []
         train_batches_cat_loss_list = []
-        src_mask = seq_model.generate_square_subsequent_mask(args.batch).to(args.device)
+        #src_mask = seq_model.generate_square_subsequent_mask(args.batch).to(args.device)
         # Loop batch
         for b_idx, batch in enumerate(train_loader):
-            if len(batch) != args.batch:
-                src_mask = seq_model.generate_square_subsequent_mask(len(batch)).to(args.device)
+            #if len(batch) != args.batch:
+                #src_mask = seq_model.generate_square_subsequent_mask(len(batch)).to(args.device)
 
             # For padding
             batch_input_seqs = []
@@ -492,7 +492,7 @@ def train(args):
             y_poi = label_padded_poi.to(device=args.device, dtype=torch.long)
             y_time = label_padded_time.to(device=args.device, dtype=torch.float)
             y_cat = label_padded_cat.to(device=args.device, dtype=torch.long)
-            y_pred_poi, y_pred_time, y_pred_cat = seq_model(x, src_mask)
+            y_pred_poi, y_pred_time, y_pred_cat = seq_model(x)
 
 
             loss_poi = criterion_poi(y_pred_poi.transpose(1, 2), y_poi)
@@ -581,10 +581,10 @@ def train(args):
         val_batches_poi_loss_list = []
         val_batches_time_loss_list = []
         val_batches_cat_loss_list = []
-        src_mask = seq_model.generate_square_subsequent_mask(args.batch).to(args.device)
+        #src_mask = seq_model.generate_square_subsequent_mask(args.batch).to(args.device)
         for vb_idx, batch in enumerate(val_loader):
-            if len(batch) != args.batch:
-                src_mask = seq_model.generate_square_subsequent_mask(len(batch)).to(args.device)
+            #if len(batch) != args.batch:
+                #src_mask = seq_model.generate_square_subsequent_mask(len(batch)).to(args.device)
 
             # For padding
             batch_input_seqs = []
@@ -626,7 +626,7 @@ def train(args):
             y_poi = label_padded_poi.to(device=args.device, dtype=torch.long)
             y_time = label_padded_time.to(device=args.device, dtype=torch.float)
             y_cat = label_padded_cat.to(device=args.device, dtype=torch.long)
-            y_pred_poi, y_pred_time, y_pred_cat = seq_model(x, src_mask)
+            y_pred_poi, y_pred_time, y_pred_cat = seq_model(x)
 
 
             # Calculate loss

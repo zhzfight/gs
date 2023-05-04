@@ -229,7 +229,8 @@ class TransformerModel(nn.Module):
         self.decoder_poi.bias.data.zero_()
         self.decoder_poi.weight.data.uniform_(-initrange, initrange)
 
-    def forward(self, src, src_mask):
+    def forward(self, src):
+        src_mask=self.generate_square_subsequent_mask(src.shape[1])
         src=torch.transpose(src,1,0)
         src = src * math.sqrt(self.embed_size)
         src = self.pos_encoder(src)
