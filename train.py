@@ -278,7 +278,7 @@ def train(args):
                                   threshold=threshold, adjOrdis='dis', stop_event=stop_event, id=idx)
         dp.start()
     print('wait 120')
-    time.sleep(120)
+    #time.sleep(120)
     print('ok start')
     # %% ====================== Build Models ======================
     # Model1: POI embedding model
@@ -350,7 +350,16 @@ def train(args):
         user_embedding = user_embed_model(input)
         user_embedding = torch.squeeze(user_embedding)
 
+        poi_idxs=[embedding_index+idx for idx in range(len(input_seq))]
+        sample_poi_embedding=poi_embeddings[poi_idxs].squeeze()
+        sample_time_embedding=time_embed_model(torch.tensor(input_seq_time,dtype=torch.float).to(device=args.device)).squeeze()
+        sample_cat_embedding=cat_embed_model(torch.tensor(input_seq_cat,dtype=torch.long).to(device=args.device)).squeeze()
+        sample_fused_embedding1=embed_fuse_model1(user_embedding.expand(len(input_seq),-1),sample_poi_embedding)
+        sample_fused_embedding2=embed_fuse_model2(sample_time_embedding,sample_cat_embedding)
+        sample_concat_embedding=torch.cat((sample_fused_embedding1,sample_fused_embedding2),dim=-1)
+
         # POI to embedding and fuse embeddings
+        '''
         input_seq_embed = []
         for idx in range(len(input_seq)):
             poi_embedding = poi_embeddings[embedding_index+idx]
@@ -375,8 +384,8 @@ def train(args):
 
             # Save final embed
             input_seq_embed.append(concat_embedding)
-
-        return input_seq_embed
+        '''
+        return sample_concat_embedding
 
 
     # %% ====================== Train ======================
@@ -460,7 +469,7 @@ def train(args):
                 input_seq_time = [each[1] for each in sample[1]]
                 label_seq_time = [each[1] for each in sample[2]]
                 label_seq_cats = [poi_idx2cat_idx_dict[each] for each in label_seq]
-                input_seq_embed = torch.stack(input_traj_to_embeddings(sample, poi_embeddings,embedding_index))
+                input_seq_embed = input_traj_to_embeddings(sample, poi_embeddings,embedding_index)
                 batch_seq_embeds.append(input_seq_embed)
                 batch_seq_lens.append(len(input_seq))
                 batch_input_seqs.append(input_seq)

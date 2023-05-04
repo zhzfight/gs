@@ -131,18 +131,18 @@ class FuseEmbeddings(nn.Module):
         self.leaky_relu = nn.LeakyReLU(0.2)
 
     def forward(self, user_embed, poi_embed):
-        x = self.fuse_embed(torch.cat((user_embed, poi_embed), 0))
+        x = self.fuse_embed(torch.cat((user_embed, poi_embed), dim=-1))
         x = self.leaky_relu(x)
         return x
 
 
 def t2v(tau, f, out_features, w, b, w0, b0, arg=None):
     if arg:
-        v1 = f(torch.matmul(tau, w) + b, arg)
+        v1 = f(torch.matmul(tau.unsqueeze(-1), w) + b, arg)
     else:
-        v1 = f(torch.matmul(tau, w) + b)
-    v2 = torch.matmul(tau, w0) + b0
-    return torch.cat([v1, v2], 1)
+        v1 = f(torch.matmul(tau.unsqueeze(-1), w) + b)
+    v2 = torch.matmul(tau.unsqueeze(-1), w0) + b0
+    return torch.cat([v1, v2], dim=-1)
 
 
 class SineActivation(nn.Module):
