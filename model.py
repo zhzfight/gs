@@ -210,7 +210,7 @@ class TransformerModel(nn.Module):
         from torch.nn import TransformerEncoder, TransformerEncoderLayer
         self.model_type = 'Transformer'
         self.pos_encoder = PositionalEncoding(embed_size, dropout)
-        encoder_layers = TransformerEncoderLayer(embed_size, nhead, nhid, dropout)
+        encoder_layers = TransformerEncoderLayer(embed_size, nhead, nhid, dropout,batch_first=True)
         self.transformer_encoder = TransformerEncoder(encoder_layers, nlayers)
         # self.encoder = nn.Embedding(num_poi, embed_size)
         self.embed_size = embed_size
