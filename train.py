@@ -478,7 +478,9 @@ def train(args):
                 batch_seq_labels_cat.append(torch.LongTensor(label_seq_cats))
                 embedding_index+=len(input_seq)
 
-
+            endtime = time.time()
+            print('calculate1 ', endtime - start_time)
+            start_time=time.time()
             # Pad seqs for batch training
             batch_padded = pad_sequence(batch_seq_embeds, batch_first=True, padding_value=-1)
             label_padded_poi = pad_sequence(batch_seq_labels_poi, batch_first=True, padding_value=-1)
@@ -503,7 +505,7 @@ def train(args):
             loss.backward()
             optimizer.step()
             endtime = time.time()
-            print('calculate ',  endtime - start_time)
+            print('calculate2 ',  endtime - start_time)
 
             # Performance measurement
             top1_acc = 0
