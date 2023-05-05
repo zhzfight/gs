@@ -277,9 +277,7 @@ def train(args):
                                   num_walks=args.num_walks,
                                   threshold=threshold, adjOrdis='dis', stop_event=stop_event, id=idx)
         dp.start()
-    print('wait 120')
-    #time.sleep(120)
-    print('ok start')
+
     # %% ====================== Build Models ======================
     # Model1: POI embedding model
     if isinstance(X, np.ndarray):
@@ -459,7 +457,7 @@ def train(args):
             pois = [each[0] for sample in batch for each in sample[1]]
             poi_embeddings = poi_embed_model(torch.tensor(pois).to(args.device))
             # Convert input seq to embeddings
-            start_time=time.time()
+
             embedding_index=0
             for sample in batch:
                 # sample[0]: traj_id, sample[1]: input_seq, sample[2]: label_seq
@@ -478,9 +476,7 @@ def train(args):
                 batch_seq_labels_cat.append(torch.LongTensor(label_seq_cats))
                 embedding_index+=len(input_seq)
 
-            endtime = time.time()
-            print('calculate1 ', endtime - start_time)
-            start_time=time.time()
+
             # Pad seqs for batch training
             batch_padded = pad_sequence(batch_seq_embeds, batch_first=True, padding_value=-1)
             label_padded_poi = pad_sequence(batch_seq_labels_poi, batch_first=True, padding_value=-1)
@@ -504,8 +500,7 @@ def train(args):
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            endtime = time.time()
-            print('calculate2 ',  endtime - start_time)
+
 
             # Performance measurement
             top1_acc = 0

@@ -325,7 +325,6 @@ class SageLayer(nn.Module):
         Generates embeddings for a batch of nodes.
         nodes     -- list of nodes
         """
-        start_time=time.time()
 
         unique_nodes_list = list(set([int(node) for node in nodes]))
         unique_nodes = {n: i for i, n in enumerate(unique_nodes_list)}
@@ -370,8 +369,7 @@ class SageLayer(nn.Module):
 
         nodes_idx=[unique_nodes[int(node)] for node in nodes]
         res=feats[nodes_idx]
-        endtime=time.time()
-        print('layer ',self.id,' ',endtime-start_time)
+
         return res
 
 
