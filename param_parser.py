@@ -42,7 +42,7 @@ def parameter_parser():
                         help='random walk with restart prob')
     parser.add_argument('--num-walks',
                         type=int,
-                        default=5,
+                        default=4,
                         help='random walk with restart step')
     parser.add_argument('--data-node-feats',
                         type=str,
@@ -130,7 +130,7 @@ def parameter_parser():
     # Training hyper-parameters
     parser.add_argument('--batch',
                         type=int,
-                        default=20,
+                        default=40,
                         help='Batch size.')
     parser.add_argument('--epochs',
                         type=int,
