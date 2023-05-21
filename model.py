@@ -203,9 +203,9 @@ class PositionalEncoding(nn.Module):
         x = x + self.pe[:x.size(0), :]
         return self.dropout(x)
 
-class GRUModel(nn.Module):
+class TimeAwareTransformerModel(nn.Module):
     def __init__(self, num_poi, num_cat, nhid,batch_size, device,dropout):
-        super(GRUModel, self).__init__()
+        super(TimeAwareTransformerModel, self).__init__()
 
 
         self.device=device
