@@ -534,7 +534,7 @@ def train(args):
             train_batches_cat_loss_list.append(loss_cat.detach().cpu().numpy())
 
             # Report training progress
-            if (b_idx % (40)) == 0:
+            if (b_idx % (100)) == 0:
                 sample_idx = 0
                 logging.info(f'Epoch:{epoch}, batch:{b_idx}, '
                              f'train_batch_loss:{loss.item():.2f}, '
@@ -656,7 +656,7 @@ def train(args):
             val_batches_cat_loss_list.append(loss_cat.detach().cpu().numpy())
 
             # Report validation progress
-            if (vb_idx % (20)) == 0:
+            if (vb_idx % (40)) == 0:
                 sample_idx = 0
                 logging.info(f'Epoch:{epoch}, batch:{vb_idx}, '
                              f'val_batch_loss:{loss.item():.2f}, '
