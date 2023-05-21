@@ -21,7 +21,7 @@ from tqdm import tqdm
 
 from dataloader import load_graph_adj_mtx, load_graph_node_features
 from model import GCN, NodeAttnMap, UserEmbeddings, Time2Vec, CategoryEmbeddings, FuseEmbeddings, TransformerModel, \
-    GraphSage
+    GraphSage,GRUModel
 from param_parser import parameter_parser
 from utils import increment_path, calculate_laplacian_matrix, zipdir, top_k_acc_last_timestep, \
     mAP_metric_last_timestep, MRR_metric_last_timestep, maksed_mse_loss, adj_list, split_list, random_walk_with_restart,\
@@ -61,6 +61,9 @@ def train(args):
     # Read check-in train data
     train_df = pd.read_csv(args.data_train)
     val_df = pd.read_csv(args.data_val)
+    if args.data_train!='dataset/dataset_tsmc2014/NYC_train.csv':
+        train_df['timestamp'] = pd.to_datetime(train_df['local_time']).astype('int64') // 10 ** 9
+        val_df['timestamp'] = pd.to_datetime(val_df['local_time']).astype('int64') // 10 ** 9
 
     # Build POI graph (built from train_df)
     print('Loading POI graph...')
@@ -144,12 +147,13 @@ def train(args):
                 poi_ids = traj_df['POI_id'].to_list()
                 poi_idxs = [poi_id2idx_dict[each] for each in poi_ids]
                 time_feature = traj_df[args.time_feature].to_list()
+                ts = traj_df['timestamp'].to_list()
 
                 input_seq = []
                 label_seq = []
                 for i in range(len(poi_idxs) - 1):
-                    input_seq.append((poi_idxs[i], time_feature[i]))
-                    label_seq.append((poi_idxs[i + 1], time_feature[i + 1]))
+                    input_seq.append((poi_idxs[i], time_feature[i],ts[i]))
+                    label_seq.append((poi_idxs[i + 1], time_feature[i + 1],ts[i+1]))
 
                 if len(input_seq) < args.short_traj_thres:
                     continue
@@ -184,6 +188,7 @@ def train(args):
                 poi_ids = traj_df['POI_id'].to_list()
                 poi_idxs = []
                 time_feature = traj_df[args.time_feature].to_list()
+                ts = traj_df['timestamp'].to_list()
 
                 for each in poi_ids:
                     if each in poi_id2idx_dict.keys():
@@ -196,8 +201,8 @@ def train(args):
                 input_seq = []
                 label_seq = []
                 for i in range(len(poi_idxs) - 1):
-                    input_seq.append((poi_idxs[i], time_feature[i]))
-                    label_seq.append((poi_idxs[i + 1], time_feature[i + 1]))
+                    input_seq.append((poi_idxs[i], time_feature[i],ts[i]))
+                    label_seq.append((poi_idxs[i + 1], time_feature[i + 1],ts[i+1]))
 
                 # Ignore seq if too short
                 if len(input_seq) < args.short_traj_thres:
@@ -314,6 +319,7 @@ def train(args):
                                  args.transformer_nhid,
                                  args.transformer_nlayers,
                                  dropout=args.transformer_dropout)
+
 
     # Define overall loss and optimizer
     optimizer = optim.Adam(params=list(poi_embed_model.parameters()) +
