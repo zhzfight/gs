@@ -203,176 +203,9 @@ class PositionalEncoding(nn.Module):
         x = x + self.pe[:x.size(0), :]
         return self.dropout(x)
 
-class TimeAwareTransformerModel(nn.Module):
-    def __init__(self, num_poi, num_cat, nhid,batch_size, device,dropout):
-        super(TimeAwareTransformerModel, self).__init__()
 
-
-        self.device=device
-        self.nhid=nhid
-        self.batch_size=batch_size
-        # self.encoder = nn.Embedding(num_poi, embed_size)
-
-        self.decoder_poi = nn.Linear(nhid, num_poi)
-        self.decoder_cat = nn.Linear(nhid, num_cat)
-        self.tu=24*3600
-        self.time_bin=3600
-        assert (self.tu)%self.time_bin==0
-        self.day_embedding=nn.Embedding(8,nhid,padding_idx=0)
-        self.hour_embedding=nn.Embedding(int((self.tu)/self.time_bin)+2,nhid,padding_idx=0)
-
-        self.W1_Q=nn.Linear(nhid,nhid)
-        self.W1_K=nn.Linear(nhid,nhid)
-        self.W1_V=nn.Linear(nhid,nhid)
-        self.norm11=nn.LayerNorm(nhid)
-        self.feedforward1 = nn.Sequential(
-            nn.Linear(nhid, nhid),
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(nhid, nhid)
-        )
-        self.norm12 = nn.LayerNorm(nhid)
-
-        self.W2_Q=nn.Linear(nhid,nhid)
-        self.W2_K=nn.Linear(nhid,nhid)
-        self.W2_V = nn.Linear(nhid, nhid)
-        self.norm21=nn.LayerNorm(nhid)
-        self.feedforward2 = nn.Sequential(
-            nn.Linear(nhid, nhid),
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(nhid, nhid)
-        )
-        self.norm22 = nn.LayerNorm(nhid)
-
-
-
-        self.init_weights()
-
-
-
-
-    def init_weights(self):
-        initrange = 0.1
-        self.decoder_poi.bias.data.zero_()
-        self.decoder_poi.weight.data.uniform_(-initrange, initrange)
-
-    def forward(self, src,batch_seq_lens,batch_input_seqs_ts,batch_label_seqs_ts):
-        hourInterval=torch.zeros((src.shape[0],src.shape[1],src.shape[1]),dtype=torch.long).to(self.device)
-        dayInterval=torch.zeros((src.shape[0],src.shape[1],src.shape[1]),dtype=torch.long).to(self.device)
-
-        label_hourInterval=torch.zeros((src.shape[0],src.shape[1],src.shape[1]),dtype=torch.long).to(self.device)
-        label_dayInterval=torch.zeros((src.shape[0],src.shape[1],src.shape[1]),dtype=torch.long).to(self.device)
-        for i in range(src.shape[0]):
-            for j in range(batch_seq_lens[i]):
-                for k in range(j+1):
-                    if i==j:
-                        hourInterval[i][j][k]=1
-                    else:
-                        hourInterval[i][j][k]=int(((batch_input_seqs_ts[i][j]-batch_input_seqs_ts[i][k])%(self.tu))/self.time_bin)+2
-                    dayInterval[i][j][k]=int((batch_input_seqs_ts[i][j]-batch_input_seqs_ts[i][k])/(self.tu))+1
-                    if dayInterval[i][j][k]>6:
-                        dayInterval[i][j][k]=7
-                    label_hourInterval[i][j][k] = int(
-                        ((batch_label_seqs_ts[i][j] - batch_input_seqs_ts[i][k]) % (self.tu)) / self.time_bin) + 2
-                    label_dayInterval[i][j][k] = int(
-                        (batch_label_seqs_ts[i][j] - batch_input_seqs_ts[i][k]) / (self.tu)) + 1
-                    if label_dayInterval[i][j][k] > 6:
-                        label_dayInterval[i][j][k] = 7
-
-
-
-
-        hourInterval_embedding=self.hour_embedding(hourInterval)
-        dayInterval_embedding=self.day_embedding(dayInterval)
-
-        label_hourInterval_embedding=self.hour_embedding(label_hourInterval)
-        label_dayInterval_embedding=self.day_embedding(label_dayInterval)
-
-        # mask attn
-        attn_mask = ~torch.tril(torch.ones((src.shape[1], src.shape[1]), dtype=torch.bool, device=self.device))
-        time_mask = torch.zeros((src.shape[0], src.shape[1]), dtype=torch.bool, device=self.device)
-        for i in range(src.shape[0]):
-            time_mask[i, batch_seq_lens[i]:] = True
-
-        attn_mask = attn_mask.unsqueeze(0).expand(src.shape[0], -1, -1)
-        time_mask = time_mask.unsqueeze(-1).expand(-1, -1, src.shape[1])
-
-        Q=self.W1_Q(src)
-        K=self.W1_K(src)
-        V=self.W1_V(src)
-
-        attn_weight=Q.matmul(torch.transpose(K,1,2))
-        attn_weight+=hourInterval_embedding.matmul(Q.unsqueeze(-1)).squeeze(-1)
-        attn_weight+=dayInterval_embedding.matmul(Q.unsqueeze(-1)).squeeze(-1)
-
-        attn_weight=attn_weight/math.sqrt(self.nhid)
-
-        paddings = torch.ones(attn_weight.shape) * (-2 ** 32 + 1)
-        paddings=paddings.to(self.device)
-
-        attn_weight=torch.where(time_mask,paddings,attn_weight)
-        attn_weight=torch.where(attn_mask,paddings,attn_weight)
-
-
-        attn_weight=F.softmax(attn_weight,dim=-1)
-        x=attn_weight.matmul(V) #B,L,D
-        x+=torch.matmul(attn_weight.unsqueeze(2),hourInterval_embedding).squeeze(2)
-        x+=torch.matmul(attn_weight.unsqueeze(2),dayInterval_embedding).squeeze(2)
-
-
-        x=self.norm11(x+src)
-        ffn_output=self.feedforward1(x)
-        ffn_output=self.norm12(x+ffn_output)
-
-        '''
-        src=ffn_output
-
-        Q = self.W2_Q(src)
-        K = self.W2_K(src)
-        V = self.W2_V(src)
-
-        attn_weight = Q.matmul(torch.transpose(K, 1, 2))
-        attn_weight += hourInterval_embedding.matmul(Q.unsqueeze(-1)).squeeze(-1)
-        attn_weight += dayInterval_embedding.matmul(Q.unsqueeze(-1)).squeeze(-1)
-        attn_weight = attn_weight / math.sqrt(self.nhid)
-        paddings = torch.ones(attn_weight.shape) * (-2 ** 32 + 1)
-        paddings = paddings.to(self.device)
-
-        attn_weight = torch.where(time_mask, paddings, attn_weight)
-        attn_weight = torch.where(attn_mask, paddings, attn_weight)
-
-        attn_weight = F.softmax(attn_weight, dim=-1)
-        x = attn_weight.matmul(V)  # B,L,D
-        x += torch.matmul(attn_weight.unsqueeze(2), hourInterval_embedding).squeeze(2)
-        x += torch.matmul(attn_weight.unsqueeze(2), dayInterval_embedding).squeeze(2)
-
-        x = self.norm21(x + src)
-        ffn_output = self.feedforward2(x)
-        ffn_output = self.norm22(x + ffn_output)
-        '''
-
-
-        #attn_mask=attn_mask.unsqueeze(-1).expand(-1,-1,-1,ffn_output.shape[-1])
-        ffn_output=ffn_output.unsqueeze(2).repeat(1,1,ffn_output.shape[1],1).transpose(2,1)
-        ffn_output=torch.add(ffn_output,label_hourInterval_embedding)
-        ffn_output=torch.add(ffn_output,label_dayInterval_embedding)
-        '''
-        paddings = torch.ones(ffn_output.shape) * (-2 ** 32 + 1)
-        paddings = paddings.to(self.device)
-        ffn_output = torch.where(attn_mask, paddings, ffn_output)
-        '''
-        decoder_output_poi = self.decoder_poi(ffn_output)
-        decoder_output_cat = self.decoder_cat(ffn_output)
-        pooled_poi=torch.zeros(decoder_output_poi.shape[0],decoder_output_poi.shape[1],decoder_output_poi.shape[3]).to(self.device)
-        pooled_cat=torch.zeros(decoder_output_cat.shape[0],decoder_output_cat.shape[1],decoder_output_cat.shape[3]).to(self.device)
-        for i in range(decoder_output_poi.shape[1]):
-            pooled_poi[:,i]=torch.mean(decoder_output_poi[:,i,:i+1],dim=1)
-            pooled_cat[:,i]=torch.mean(decoder_output_cat[:,i,:i+1],dim=1)
-
-        return pooled_poi,pooled_cat
 class TransformerModel(nn.Module):
-    def __init__(self, num_poi, num_cat, embed_size, nhead, nhid, nlayers, dropout=0.5):
+    def __init__(self, num_poi, num_cat, embed_size, nhead, nhid, nlayers,device, dropout=0.5):
         super(TransformerModel, self).__init__()
         from torch.nn import TransformerEncoder, TransformerEncoderLayer
         self.model_type = 'Transformer'
@@ -380,9 +213,9 @@ class TransformerModel(nn.Module):
         encoder_layers = TransformerEncoderLayer(embed_size, nhead, nhid, dropout)
         self.transformer_encoder = TransformerEncoder(encoder_layers, nlayers)
         # self.encoder = nn.Embedding(num_poi, embed_size)
+        self.device=device
         self.embed_size = embed_size
         self.decoder_poi = nn.Linear(embed_size, num_poi)
-        self.decoder_time = nn.Linear(embed_size, 1)
         self.decoder_cat = nn.Linear(embed_size, num_cat)
         self.init_weights()
 
@@ -397,16 +230,15 @@ class TransformerModel(nn.Module):
         self.decoder_poi.weight.data.uniform_(-initrange, initrange)
 
     def forward(self, src):
-        src_mask=self.generate_square_subsequent_mask(src.shape[1])
+        src_mask=self.generate_square_subsequent_mask(src.shape[1]).to(self.device)
         src=torch.transpose(src,1,0)
         src = src * math.sqrt(self.embed_size)
         src = self.pos_encoder(src)
         x = self.transformer_encoder(src, src_mask)
         x=torch.transpose(x,1,0)
         out_poi = self.decoder_poi(x)
-        out_time = self.decoder_time(x)
         out_cat = self.decoder_cat(x)
-        return out_poi, out_time, out_cat
+        return out_poi,  out_cat
 
 
 

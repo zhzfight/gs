@@ -21,7 +21,7 @@ from tqdm import tqdm
 
 from dataloader import load_graph_adj_mtx, load_graph_node_features
 from model import GCN, NodeAttnMap, UserEmbeddings, Time2Vec, CategoryEmbeddings, FuseEmbeddings, TransformerModel, \
-    GraphSage,TimeAwareTransformerModel
+    GraphSage
 from param_parser import parameter_parser
 from utils import increment_path, calculate_laplacian_matrix, zipdir, top_k_acc_last_timestep, \
     mAP_metric_last_timestep, MRR_metric_last_timestep, maksed_mse_loss, adj_list, split_list, random_walk_with_restart,\
@@ -61,9 +61,6 @@ def train(args):
     # Read check-in train data
     train_df = pd.read_csv(args.data_train)
     val_df = pd.read_csv(args.data_val)
-    if args.data_train!='dataset/dataset_tsmc2014/NYC_train.csv':
-        train_df['timestamp'] = pd.to_datetime(train_df['local_time']).astype('int64') // 10 ** 9
-        val_df['timestamp'] = pd.to_datetime(val_df['local_time']).astype('int64') // 10 ** 9
 
     # Build POI graph (built from train_df)
     print('Loading POI graph...')
@@ -147,13 +144,12 @@ def train(args):
                 poi_ids = traj_df['POI_id'].to_list()
                 poi_idxs = [poi_id2idx_dict[each] for each in poi_ids]
                 time_feature = traj_df[args.time_feature].to_list()
-                ts = traj_df['timestamp'].to_list()
 
                 input_seq = []
                 label_seq = []
                 for i in range(len(poi_idxs) - 1):
-                    input_seq.append((poi_idxs[i], time_feature[i],ts[i]))
-                    label_seq.append((poi_idxs[i + 1], time_feature[i + 1],ts[i+1]))
+                    input_seq.append((poi_idxs[i], time_feature[i]))
+                    label_seq.append((poi_idxs[i + 1], time_feature[i + 1]))
 
                 if len(input_seq) < args.short_traj_thres:
                     continue
@@ -188,7 +184,6 @@ def train(args):
                 poi_ids = traj_df['POI_id'].to_list()
                 poi_idxs = []
                 time_feature = traj_df[args.time_feature].to_list()
-                ts = traj_df['timestamp'].to_list()
 
                 for each in poi_ids:
                     if each in poi_id2idx_dict.keys():
@@ -201,8 +196,8 @@ def train(args):
                 input_seq = []
                 label_seq = []
                 for i in range(len(poi_idxs) - 1):
-                    input_seq.append((poi_idxs[i], time_feature[i],ts[i]))
-                    label_seq.append((poi_idxs[i + 1], time_feature[i + 1],ts[i+1]))
+                    input_seq.append((poi_idxs[i], time_feature[i]))
+                    label_seq.append((poi_idxs[i + 1], time_feature[i + 1]))
 
                 # Ignore seq if too short
                 if len(input_seq) < args.short_traj_thres:
@@ -312,14 +307,13 @@ def train(args):
 
     # %% Model6: Sequence model
     args.seq_input_embed = args.poi_embed_dim + args.user_embed_dim + args.time_embed_dim + args.cat_embed_dim
-
-
-    seq_model = TimeAwareTransformerModel(num_poi=num_pois,
-                                          num_cat=num_cats,
-                                          nhid=args.seq_input_embed,
-                                          batch_size=args.batch,
-                                          device=args.device,
-                                          dropout=args.transformer_dropout)
+    seq_model = TransformerModel(num_pois,
+                                 num_cats,
+                                 args.seq_input_embed,
+                                 args.transformer_nhead,
+                                 args.transformer_nhid,
+                                 args.transformer_nlayers,
+                                 dropout=args.transformer_dropout)
 
     # Define overall loss and optimizer
     optimizer = optim.Adam(params=list(poi_embed_model.parameters()) +
@@ -334,7 +328,7 @@ def train(args):
 
     criterion_poi = nn.CrossEntropyLoss(ignore_index=-1)  # -1 is padding
     criterion_cat = nn.CrossEntropyLoss(ignore_index=-1)  # -1 is padding
-
+    criterion_time = maksed_mse_loss
 
     lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, 'min', verbose=True, factor=args.lr_scheduler_factor)
@@ -451,11 +445,10 @@ def train(args):
 
             # For padding
             batch_input_seqs = []
-            batch_input_seqs_ts = []
-            batch_label_seqs_ts = []
             batch_seq_lens = []
             batch_seq_embeds = []
             batch_seq_labels_poi = []
+            batch_seq_labels_time = []
             batch_seq_labels_cat = []
 
             pois = [each[0] for sample in batch for each in sample[1]]
@@ -467,17 +460,16 @@ def train(args):
                 # sample[0]: traj_id, sample[1]: input_seq, sample[2]: label_seq
                 traj_id = sample[0]
                 input_seq = [each[0] for each in sample[1]]
-                input_seq_ts = [each[2] for each in sample[1]]
                 label_seq = [each[0] for each in sample[2]]
-                label_seq_ts = [each[2] for each in sample[2]]
+                input_seq_time = [each[1] for each in sample[1]]
+                label_seq_time = [each[1] for each in sample[2]]
                 label_seq_cats = [poi_idx2cat_idx_dict[each] for each in label_seq]
                 input_seq_embed = input_traj_to_embeddings(sample, poi_embeddings,embedding_index)
                 batch_seq_embeds.append(input_seq_embed)
                 batch_seq_lens.append(len(input_seq))
                 batch_input_seqs.append(input_seq)
-                batch_input_seqs_ts.append(input_seq_ts)
-                batch_label_seqs_ts.append(label_seq_ts)
                 batch_seq_labels_poi.append(torch.LongTensor(label_seq))
+                batch_seq_labels_time.append(torch.FloatTensor(label_seq_time))
                 batch_seq_labels_cat.append(torch.LongTensor(label_seq_cats))
                 embedding_index+=len(input_seq)
 
@@ -485,20 +477,22 @@ def train(args):
             # Pad seqs for batch training
             batch_padded = pad_sequence(batch_seq_embeds, batch_first=True, padding_value=-1)
             label_padded_poi = pad_sequence(batch_seq_labels_poi, batch_first=True, padding_value=-1)
+            label_padded_time = pad_sequence(batch_seq_labels_time, batch_first=True, padding_value=-1)
             label_padded_cat = pad_sequence(batch_seq_labels_cat, batch_first=True, padding_value=-1)
 
             # Feedforward
             x = batch_padded.to(device=args.device, dtype=torch.float)
             y_poi = label_padded_poi.to(device=args.device, dtype=torch.long)
+            y_time = label_padded_time.to(device=args.device, dtype=torch.float)
             y_cat = label_padded_cat.to(device=args.device, dtype=torch.long)
-            y_pred_poi,  y_pred_cat = seq_model(x,batch_seq_lens,batch_input_seqs_ts,batch_label_seqs_ts)
+            y_pred_poi,  y_pred_cat = seq_model(x)
 
 
             loss_poi = criterion_poi(y_pred_poi.transpose(1, 2), y_poi)
             loss_cat = criterion_cat(y_pred_cat.transpose(1, 2), y_cat)
 
             # Final loss
-            loss = loss_poi  + loss_cat
+            loss = loss_poi + loss_cat
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -534,7 +528,7 @@ def train(args):
             train_batches_cat_loss_list.append(loss_cat.detach().cpu().numpy())
 
             # Report training progress
-            if (b_idx % (100)) == 0:
+            if (b_idx % (1000)) == 0:
                 sample_idx = 0
                 logging.info(f'Epoch:{epoch}, batch:{b_idx}, '
                              f'train_batch_loss:{loss.item():.2f}, '
@@ -552,7 +546,8 @@ def train(args):
                              f'label_seq:{batch[sample_idx][2]}\n'
                              f'pred_seq_poi:{list(np.argmax(batch_pred_pois, axis=2)[sample_idx][:batch_seq_lens[sample_idx]])} \n'
                              f'label_seq_cat:{[poi_idx2cat_idx_dict[each[0]] for each in batch[sample_idx][2]]}\n'
-                             f'pred_seq_cat:{list(np.argmax(batch_pred_cats, axis=2)[sample_idx][:batch_seq_lens[sample_idx]])} \n' +
+                             f'pred_seq_cat:{list(np.argmax(batch_pred_cats, axis=2)[sample_idx][:batch_seq_lens[sample_idx]])} \n'
+                             f'label_seq_time:{list(batch_seq_labels_time[sample_idx].numpy()[:batch_seq_lens[sample_idx]])}\n' +
                              '=' * 100)
 
         # train end --------------------------------------------------------------------------------------------------------
@@ -579,11 +574,10 @@ def train(args):
 
             # For padding
             batch_input_seqs = []
-            batch_input_seqs_ts = []
-            batch_label_seqs_ts = []
             batch_seq_lens = []
             batch_seq_embeds = []
             batch_seq_labels_poi = []
+            batch_seq_labels_time = []
             batch_seq_labels_cat = []
 
             pois = [each[0] for sample in batch for each in sample[1]]
@@ -593,18 +587,16 @@ def train(args):
             for sample in batch:
                 traj_id = sample[0]
                 input_seq = [each[0] for each in sample[1]]
-                input_seq_ts = [each[2] for each in sample[1]]
                 label_seq = [each[0] for each in sample[2]]
-                label_seq_ts = [each[2] for each in sample[2]]
-
+                input_seq_time = [each[1] for each in sample[1]]
+                label_seq_time = [each[1] for each in sample[2]]
                 label_seq_cats = [poi_idx2cat_idx_dict[each] for each in label_seq]
                 input_seq_embed = input_traj_to_embeddings(sample, poi_embeddings,embedding_index)
                 batch_seq_embeds.append(input_seq_embed)
                 batch_seq_lens.append(len(input_seq))
                 batch_input_seqs.append(input_seq)
-                batch_input_seqs_ts.append(input_seq_ts)
-                batch_label_seqs_ts.append(label_seq_ts)
                 batch_seq_labels_poi.append(torch.LongTensor(label_seq))
+                batch_seq_labels_time.append(torch.FloatTensor(label_seq_time))
                 batch_seq_labels_cat.append(torch.LongTensor(label_seq_cats))
                 embedding_index+=len(input_seq)
 
@@ -612,13 +604,15 @@ def train(args):
             # Pad seqs for batch training
             batch_padded = pad_sequence(batch_seq_embeds, batch_first=True, padding_value=-1)
             label_padded_poi = pad_sequence(batch_seq_labels_poi, batch_first=True, padding_value=-1)
+            label_padded_time = pad_sequence(batch_seq_labels_time, batch_first=True, padding_value=-1)
             label_padded_cat = pad_sequence(batch_seq_labels_cat, batch_first=True, padding_value=-1)
 
             # Feedforward
             x = batch_padded.to(device=args.device, dtype=torch.float)
             y_poi = label_padded_poi.to(device=args.device, dtype=torch.long)
+            y_time = label_padded_time.to(device=args.device, dtype=torch.float)
             y_cat = label_padded_cat.to(device=args.device, dtype=torch.long)
-            y_pred_poi,  y_pred_cat = seq_model(x,batch_seq_lens,batch_input_seqs_ts,batch_label_seqs_ts)
+            y_pred_poi,  y_pred_cat = seq_model(x)
 
 
             # Calculate loss
@@ -656,7 +650,7 @@ def train(args):
             val_batches_cat_loss_list.append(loss_cat.detach().cpu().numpy())
 
             # Report validation progress
-            if (vb_idx % (40)) == 0:
+            if (vb_idx % (200)) == 0:
                 sample_idx = 0
                 logging.info(f'Epoch:{epoch}, batch:{vb_idx}, '
                              f'val_batch_loss:{loss.item():.2f}, '
@@ -674,7 +668,8 @@ def train(args):
                              f'label_seq:{batch[sample_idx][2]}\n'
                              f'pred_seq_poi:{list(np.argmax(batch_pred_pois, axis=2)[sample_idx][:batch_seq_lens[sample_idx]])} \n'
                              f'label_seq_cat:{[poi_idx2cat_idx_dict[each[0]] for each in batch[sample_idx][2]]}\n'
-                             f'pred_seq_cat:{list(np.argmax(batch_pred_cats, axis=2)[sample_idx][:batch_seq_lens[sample_idx]])} \n' +
+                             f'pred_seq_cat:{list(np.argmax(batch_pred_cats, axis=2)[sample_idx][:batch_seq_lens[sample_idx]])} \n'
+                             f'label_seq_time:{list(batch_seq_labels_time[sample_idx].numpy()[:batch_seq_lens[sample_idx]])}\n' +
                              '=' * 100)
         # valid end --------------------------------------------------------------------------------------------------------
 

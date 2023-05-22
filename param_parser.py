@@ -78,7 +78,10 @@ def parameter_parser():
                         type=int,
                         default=128,
                         help='User embedding dimensions')
-
+    parser.add_argument('--gcn-dropout',
+                        type=float,
+                        default=0.3,
+                        help='Dropout rate for gcn')
     parser.add_argument('--dropout',
                         type=float,
                         default=0.1,
@@ -127,7 +130,7 @@ def parameter_parser():
     # Training hyper-parameters
     parser.add_argument('--batch',
                         type=int,
-                        default=3,
+                        default=1,
                         help='Batch size.')
     parser.add_argument('--epochs',
                         type=int,
