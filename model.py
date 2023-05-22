@@ -325,7 +325,7 @@ class TimeAwareTransformerModel(nn.Module):
         ffn_output=self.feedforward1(x)
         ffn_output=self.norm12(x+ffn_output)
 
-
+        '''
         src=ffn_output
 
         Q = self.W2_Q(src)
@@ -350,6 +350,7 @@ class TimeAwareTransformerModel(nn.Module):
         x = self.norm21(x + src)
         ffn_output = self.feedforward2(x)
         ffn_output = self.norm22(x + ffn_output)
+        '''
 
 
         #attn_mask=attn_mask.unsqueeze(-1).expand(-1,-1,-1,ffn_output.shape[-1])
