@@ -21,7 +21,7 @@ def parameter_parser():
                         help='Random seed')
     parser.add_argument('--cpus',
                         type=int,
-                        default=8,
+                        default=2,
                         help='num of cpu')
     parser.add_argument('--device',
                         type=str,
@@ -72,7 +72,7 @@ def parameter_parser():
 
     parser.add_argument('--poi-embed-dim',
                         type=int,
-                        default=300,
+                        default=240,
                         help='sage embedding dimensions')
     parser.add_argument('--user-embed-dim',
                         type=int,
@@ -132,6 +132,10 @@ def parameter_parser():
                         type=int,
                         default=2,
                         help='Batch size.')
+    parser.add_argument('--lambda_theta',
+                        type=float,
+                        default=0.01,
+                        help='bpr parameter')
     parser.add_argument('--epochs',
                         type=int,
                         default=200,

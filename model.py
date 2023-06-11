@@ -242,7 +242,7 @@ class TransformerModel(nn.Module):
 
 
 class TimeAwareTransformer(nn.Module):
-    def __init__(self, num_poi, num_cat, nhid,batch_size, device,dropout):
+    def __init__(self, num_poi, num_cat, nhid,output_dim,batch_size, device,dropout):
         super(TimeAwareTransformer, self).__init__()
 
 
@@ -251,8 +251,7 @@ class TimeAwareTransformer(nn.Module):
         self.batch_size=batch_size
         # self.encoder = nn.Embedding(num_poi, embed_size)
 
-        self.decoder_poi = nn.Linear(nhid, num_poi)
-        self.decoder_cat = nn.Linear(nhid, num_cat)
+        self.decoder_poi = nn.Linear(nhid, output_dim)
         self.tu=24*3600
         self.time_bin=3600
         assert (self.tu)%self.time_bin==0
@@ -362,7 +361,7 @@ class TimeAwareTransformer(nn.Module):
         x=self.norm11(x+src)
         ffn_output=self.feedforward1(x)
         ffn_output=self.norm12(x+ffn_output)
-        '''
+
 
         src=ffn_output
 
@@ -388,7 +387,7 @@ class TimeAwareTransformer(nn.Module):
         x = self.norm21(x + src)
         ffn_output = self.feedforward2(x)
         ffn_output = self.norm22(x + ffn_output)
-        '''
+
 
         #attn_mask=attn_mask.unsqueeze(-1).expand(-1,-1,-1,ffn_output.shape[-1])
         ffn_output=ffn_output.unsqueeze(2).repeat(1,1,ffn_output.shape[1],1).transpose(2,1)
@@ -400,20 +399,17 @@ class TimeAwareTransformer(nn.Module):
         ffn_output = torch.where(attn_mask, paddings, ffn_output)
         '''
         decoder_output_poi = self.decoder_poi(ffn_output)
-        decoder_output_cat = self.decoder_cat(ffn_output)
         pooled_poi=torch.zeros(decoder_output_poi.shape[0],decoder_output_poi.shape[1],decoder_output_poi.shape[3]).to(self.device)
-        pooled_cat=torch.zeros(decoder_output_cat.shape[0],decoder_output_cat.shape[1],decoder_output_cat.shape[3]).to(self.device)
         for i in range(decoder_output_poi.shape[1]):
             pooled_poi[:,i]=torch.mean(decoder_output_poi[:,i,:i+1],dim=1)
-            pooled_cat[:,i]=torch.mean(decoder_output_cat[:,i,:i+1],dim=1)
 
-        return pooled_poi,pooled_cat
+        return pooled_poi
 class MeanAggregator(nn.Module):
     """
     Aggregates a node's embeddings using mean of neighbors' embeddings and transform
     """
 
-    def __init__(self, id2feat, device):
+    def __init__(self, id2feat, device,dim):
         """
         features -- function mapping LongTensor of node ids to FloatTensor of feature values.
         cuda -- whether to use GPU
@@ -421,6 +417,7 @@ class MeanAggregator(nn.Module):
         super(MeanAggregator, self).__init__()
         self.id2feat = id2feat
         self.device = device
+        self.W=nn.Linear(dim,dim)
 
     def forward(self, to_neighs):
         """
@@ -443,6 +440,7 @@ class MeanAggregator(nn.Module):
 
         embed_matrix = self.id2feat(
             torch.LongTensor(list(unique_nodes_list)).to(self.device))  # （unique_count, feat_dim)
+        embed_matrix=self.W(embed_matrix)
         to_feats = mask.mm(embed_matrix)  # n * embed_dim
         return to_feats  # n * embed_dim
 
@@ -459,8 +457,8 @@ class SageLayer(nn.Module):
                  id,adj_queues,dis_queues):
         super(SageLayer, self).__init__()
         self.id2feat = id2feat
-        self.dis_agg = MeanAggregator(self.id2feat, device)
-        self.adj_agg = MeanAggregator(self.id2feat, device)
+        self.dis_agg = MeanAggregator(self.id2feat, device,input_dim)
+        self.adj_agg = MeanAggregator(self.id2feat, device,input_dim)
         self.device = device
         self.adj_list = adj_list
         self.dis_list = dis_list

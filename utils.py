@@ -14,6 +14,27 @@ import random
 
 
 geod = Geodesic.WGS84
+def sample_from(A, B,C):
+    # 创建一个空集合，用于存储B中不在A中的元素
+    candidates = set()
+    # 遍历B中的每个元素
+    for x in B:
+        # 如果x不在A中
+        if x not in A:
+            # 将x添加到候选集合中
+            candidates.add(x)
+    # 如果候选集合为空，说明B中的所有元素都在A中，无法采样，返回None
+    if len(candidates) == 0:
+        for x in C:
+            # 如果x不在A中
+            if x not in A:
+                # 将x添加到候选集合中
+                candidates.add(x)
+    if len(candidates) == 0:
+        return None
+    # 否则，从候选集合中随机选择一个元素并返回
+    else:
+        return random.choice(list(candidates))
 
 def split_list_by_ratio(lst, ratios):
     # 检查比例列表是否加起来等于1，如果不是，抛出异常

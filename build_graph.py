@@ -6,7 +6,7 @@ import networkx as nx
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-
+from sklearn.cluster import KMeans
 
 def build_global_POI_checkin_graph(df, exclude_user=None):
     G = nx.DiGraph()
@@ -79,6 +79,26 @@ def save_graph_to_csv(G, dst_dir):
             print(f'{node_name},{checkin_cnt},'
                   f'{poi_catid},{poi_catid_code},{poi_catname},'
                   f'{latitude},{longitude}', file=f)
+    # 读取数据
+    df = pd.read_csv(os.path.join(dst_dir, 'graph_X.csv'),sep=',')
+    # 提取经纬度特征
+    X = df[["longitude", "latitude"]]
+    # 创建K-MEANS模型，假设聚类数为4
+    model = KMeans(n_clusters=150, random_state=0)
+    # 拟合模型
+    model.fit(X)
+    # 预测类别
+    labels = model.predict(X)
+    # 在pandas后面添加一列表示类别
+    df["cluster_1"] = labels
+    model = KMeans(n_clusters=75, random_state=0)
+    # 拟合模型
+    model.fit(X)
+    # 预测类别
+    labels = model.predict(X)
+    # 在pandas后面添加一列表示类别
+    df["cluster_2"] = labels
+    df.to_csv(os.path.join(dst_dir, 'graph_X.csv'),index=False)
 
 
 def save_graph_to_pickle(G, dst_dir):
