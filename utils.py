@@ -14,27 +14,44 @@ import random
 
 
 geod = Geodesic.WGS84
-def sample_from(A, B,C):
-    # 创建一个空集合，用于存储B中不在A中的元素
-    candidates = set()
-    # 遍历B中的每个元素
-    for x in B:
-        # 如果x不在A中
-        if x not in A:
-            # 将x添加到候选集合中
-            candidates.add(x)
-    # 如果候选集合为空，说明B中的所有元素都在A中，无法采样，返回None
-    if len(candidates) == 0:
-        for x in C:
-            # 如果x不在A中
-            if x not in A:
-                # 将x添加到候选集合中
-                candidates.add(x)
-    if len(candidates) == 0:
-        return None
-    # 否则，从候选集合中随机选择一个元素并返回
-    else:
-        return random.choice(list(candidates))
+
+def neg_sample(k,user_checkIn_POI,label_POI,target_time,timestatic,region,near_clusters,poi_idx2kmeans):
+    ne_pois=[]
+    user_checkIn_POI=set(user_checkIn_POI)
+    #timesample
+    for i in range(2):
+        for j,poi in enumerate(label_POI):
+            candidates=region[poi_idx2kmeans[poi]]
+            candidates=set(candidates)
+            diff=candidates.difference(user_checkIn_POI)
+            h=target_time[j]
+            h1=int(h/2)
+            if h%2==0:
+                h2=(int(h/2)-1)%12
+            else:
+                h2=(int(h/2)+1)%12
+            diff_count={}
+            for p in diff:
+                diff_count[p]=timestatic[p][h1]+1
+                diff_count[p]+=timestatic[p][h2]
+            p_list=list(diff_count.keys())
+            weight_list=list(diff_count.values())
+            weight_list=[sum(weight_list)-g for g in weight_list]
+            sample_list = random.choices(p_list, k=1, weights=weight_list)
+            ne_pois.append(sample_list[0])
+
+    #spacesample
+    for i in range(k-2):
+        for poi in label_POI:
+            candidates=[]
+            for c in near_clusters[poi]:
+                candidates.extend(region[c])
+            candidates=set(candidates)
+            diff=candidates.difference(user_checkIn_POI)
+            diff=list(diff)
+            ne_pois.append(random.choice(diff))
+    return ne_pois
+
 
 def split_list_by_ratio(lst, ratios):
     # 检查比例列表是否加起来等于1，如果不是，抛出异常

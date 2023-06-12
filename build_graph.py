@@ -52,6 +52,12 @@ def build_global_POI_checkin_graph(df, exclude_user=None):
 
     return G
 
+# 定义一个函数来计算两个点之间的欧几里得距离
+def euclidean_distance(x1, y1, x2, y2):
+    return np.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
+
+
+
 
 def save_graph_to_csv(G, dst_dir):
     # Save graph to an adj matrix file and a nodes file
@@ -84,20 +90,45 @@ def save_graph_to_csv(G, dst_dir):
     # 提取经纬度特征
     X = df[["longitude", "latitude"]]
     # 创建K-MEANS模型，假设聚类数为4
-    model = KMeans(n_clusters=150, random_state=0)
+    model = KMeans(n_clusters=100, random_state=0)
     # 拟合模型
     model.fit(X)
     # 预测类别
     labels = model.predict(X)
     # 在pandas后面添加一列表示类别
-    df["cluster_1"] = labels
-    model = KMeans(n_clusters=75, random_state=0)
-    # 拟合模型
-    model.fit(X)
-    # 预测类别
-    labels = model.predict(X)
-    # 在pandas后面添加一列表示类别
-    df["cluster_2"] = labels
+    df["cluster"] = labels
+    # 使用pandas.apply方法来对数据框中的每一行应用这个函数，并得到一个新的列
+    # 定义一个函数来计算一个POI与其他POI之间的距离，并返回最近的4个cluster
+    # 使用pandas.groupby方法来对数据框按照cluster进行分组，并计算每个分组的坐标的平均值，这样就得到了每个cluster的质心
+    centroids = df.groupby('cluster').agg({'longitude': 'mean', 'latitude': 'mean'}).reset_index()
+
+    # 定义一个函数来计算一个POI与其他cluster的质心之间的距离，并返回最近的4个cluster
+    def nearest_clusters(POI_ID, centroids, k=4):
+        # 获取给定POI的坐标和cluster
+        x = df[df['node_name/poi_id'] == POI_ID]['longitude'].values[0]
+        y = df[df['node_name/poi_id'] == POI_ID]['latitude'].values[0]
+        cluster = df[df['node_name/poi_id'] == POI_ID]['cluster'].values[0]
+        # 创建一个空列表来存储最近cluster和距离
+        nearest = []
+        # 遍历其他cluster
+        for c in centroids['cluster'].unique():
+            # 跳过给定POI所属的cluster
+            if c == cluster:
+                continue
+            # 获取其他cluster的质心坐标
+            x_other = centroids[centroids['cluster'] == c]['longitude'].values[0]
+            y_other = centroids[centroids['cluster'] == c]['latitude'].values[0]
+            # 计算两个点之间的距离
+            dist = euclidean_distance(x, y, x_other, y_other)
+            # 将cluster和距离添加到列表中
+            nearest.append((c, dist))
+        # 对列表按照距离进行排序
+        nearest.sort(key=lambda x: x[1])
+        # 返回最近的k个cluster，只保留cluster编号，不保留距离
+        return [x[0] for x in nearest[:k]]
+
+    # 使用pandas.apply方法来对数据框中的每一行应用这个函数，并得到一个新的列
+    df['nearest_clusters'] = df['node_name/poi_id'].apply(nearest_clusters, args=(centroids,))
     df.to_csv(os.path.join(dst_dir, 'graph_X.csv'),index=False)
 
 
@@ -154,6 +185,8 @@ def print_graph_statisics(G):
     print(f"Edge frequency (mean): {np.mean(edge_weights):.2f}")
     for i in range(0, 101, 20):
         print(f"Edge frequency ({i} percentile): {np.percentile(edge_weights, i)}")
+
+
 
 
 if __name__ == '__main__':

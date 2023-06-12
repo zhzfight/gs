@@ -21,7 +21,7 @@ def parameter_parser():
                         help='Random seed')
     parser.add_argument('--cpus',
                         type=int,
-                        default=2,
+                        default=8,
                         help='num of cpu')
     parser.add_argument('--device',
                         type=str,
@@ -130,7 +130,7 @@ def parameter_parser():
     # Training hyper-parameters
     parser.add_argument('--batch',
                         type=int,
-                        default=2,
+                        default=8,
                         help='Batch size.')
     parser.add_argument('--lambda_theta',
                         type=float,

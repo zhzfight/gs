@@ -440,7 +440,7 @@ class MeanAggregator(nn.Module):
 
         embed_matrix = self.id2feat(
             torch.LongTensor(list(unique_nodes_list)).to(self.device))  # （unique_count, feat_dim)
-        embed_matrix=self.W(embed_matrix)
+        #embed_matrix=self.W(embed_matrix)
         to_feats = mask.mm(embed_matrix)  # n * embed_dim
         return to_feats  # n * embed_dim
 
@@ -565,3 +565,9 @@ class GraphSage(nn.Module):
         return feats
     def reset_buffer(self):
         self.layer2.reset_buffer()
+class Projection(nn.Module):
+    def __init__(self,dim):
+        super(Projection, self).__init__()
+        self.W=nn.Linear(dim,dim)
+    def forward(self,src):
+        return self.W(src)
