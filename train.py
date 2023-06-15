@@ -339,7 +339,7 @@ def train(args):
         optimizer, 'min', verbose=True, factor=args.lr_scheduler_factor)
 
     # %% Tool functions for training
-    def input_traj_to_embeddings(sample, poi_embeddings, embedding_index):
+    def input_traj_to_embeddings(sample, poi_embeddings, embedding_index=None):
         # Parse sample
         traj_id = sample[0]
         input_seq = [each[0] for each in sample[1]]
@@ -352,14 +352,18 @@ def train(args):
         input = torch.LongTensor([user_idx]).to(device=args.device)
         user_embedding = user_embed_model(input)
         user_embedding = torch.squeeze(user_embedding)
-
-        poi_idxs=[embedding_index+idx for idx in range(len(input_seq))]
-        sample_poi_embedding=poi_embeddings[poi_idxs].squeeze()
-        sample_time_embedding=time_embed_model(torch.tensor(input_seq_time,dtype=torch.float).to(device=args.device)).squeeze()
-        sample_cat_embedding=cat_embed_model(torch.tensor(input_seq_cat,dtype=torch.long).to(device=args.device)).squeeze()
-        sample_fused_embedding1=embed_fuse_model1(user_embedding.expand(len(input_seq),-1),sample_poi_embedding)
-        sample_fused_embedding2=embed_fuse_model2(sample_time_embedding,sample_cat_embedding)
-        sample_concat_embedding=torch.cat((sample_fused_embedding1,sample_fused_embedding2),dim=-1)
+        if embedding_index == None:
+            poi_idxs = input_seq
+        else:
+            poi_idxs = [embedding_index + idx for idx in range(len(input_seq))]
+        sample_poi_embedding = poi_embeddings[poi_idxs].squeeze()
+        sample_time_embedding = time_embed_model(
+            torch.tensor(input_seq_time, dtype=torch.float).to(device=args.device)).squeeze()
+        sample_cat_embedding = cat_embed_model(
+            torch.tensor(input_seq_cat, dtype=torch.long).to(device=args.device)).squeeze()
+        sample_fused_embedding1 = embed_fuse_model1(user_embedding.expand(len(input_seq), -1), sample_poi_embedding)
+        sample_fused_embedding2 = embed_fuse_model2(sample_time_embedding, sample_cat_embedding)
+        sample_concat_embedding = torch.cat((sample_fused_embedding1, sample_fused_embedding2), dim=-1)
 
         # POI to embedding and fuse embeddings
         '''
