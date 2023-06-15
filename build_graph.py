@@ -149,8 +149,11 @@ if __name__ == '__main__':
     save_graph_to_csv(G, dst_dir=dst_dir)
     save_graph_edgelist(G, dst_dir=dst_dir)
 
-    test_df=pd.read_csv(os.path.join(dst_dir, 'NYC_test.csv'))
-    df=pd.concat(train_df,test_df)
+
+    cat_ids=set(train_df['POI_catid'].to_list())
+    val_df=pd.read_csv(os.path.join(dst_dir, 'NYC_val.csv'))
+    val_df = val_df[val_df['POI_catid'].isin(cat_ids)]
+    df=pd.concat([train_df, val_df])
     G=build_global_POI_checkin_graph(df)
     nodelist = G.nodes()
     A = nx.adjacency_matrix(G, nodelist=nodelist)
@@ -172,7 +175,9 @@ if __name__ == '__main__':
             print(f'{node_name},{checkin_cnt},'
                   f'{poi_catid},{poi_catid_code},{poi_catname},'
                   f'{latitude},{longitude}', file=f)
-
+    all_nodes_df = pd.read_csv('dataset/NYC/graph_Xll.csv')
+    new_cat_ids = list(set(all_nodes_df['poi_catid'].tolist()))
+    print('fuck')
 
 
 

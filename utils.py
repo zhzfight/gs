@@ -11,7 +11,8 @@ from scipy.sparse.linalg import eigsh
 from geographiclib.geodesic import Geodesic
 from tqdm import tqdm
 import random
-
+from multiprocessing import Pool
+from tqdm.contrib.concurrent import process_map
 
 geod = Geodesic.WGS84
 
@@ -113,9 +114,13 @@ def get_node_geo_context_neighbors(index, nodes, geo_dis):
     return neighbors
 # 定义一个函数，获取所有节点的邻居列表
 def get_all_nodes_neighbors(nodes,geo_dis):
-    result = [[] for _ in range(len(nodes))]
-    for i in tqdm(range(len(nodes))):
-        result[i]=get_node_geo_context_neighbors(i, nodes, geo_dis)
+    result = process_map(get_node_geo_context_neighbors, range(len(nodes)), [nodes] * len(nodes),
+                         [geo_dis] * len(nodes), max_workers=None, chunksize=1)
+    '''''
+    with Pool() as pool:
+        result = pool.starmap(get_node_geo_context_neighbors, [(i, nodes, geo_dis) for i in range(len(nodes))])
+    '''
+
     return result
 
 def adj_list(raw_A,raw_X,geo_dis):

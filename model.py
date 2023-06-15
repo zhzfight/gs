@@ -451,15 +451,14 @@ class SageLayer(nn.Module):
     gcn --- whether to perform concatenation GraphSAGE-style, or add self-loops GCN-style
     """
 
-    def __init__(self, id2feat, adj_list, dis_list, restart_prob, num_walks, input_dim, output_dim, device, dropout,
+    def __init__(self, id2feat,  restart_prob, num_walks, input_dim, output_dim, device, dropout,
                  id,adj_queues,dis_queues):
         super(SageLayer, self).__init__()
         self.id2feat = id2feat
         self.dis_agg = MeanAggregator(self.id2feat, device)
         self.adj_agg = MeanAggregator(self.id2feat, device)
         self.device = device
-        self.adj_list = adj_list
-        self.dis_list = dis_list
+
         self.restart_prob = restart_prob
         self.num_walks = num_walks
         self.leakyRelu = nn.LeakyReLU(0.2)
@@ -481,7 +480,7 @@ class SageLayer(nn.Module):
         self.W_dis.weight.data.uniform_(-initrange, initrange)
         self.bias.data.zero_()
 
-    def forward(self, nodes):
+    def forward(self, nodes,adj_list,dis_list):
         """
         Generates embeddings for a batch of nodes.
         nodes     -- list of nodes
@@ -507,11 +506,11 @@ class SageLayer(nn.Module):
                 missing_dis_idx.append(idx)
 
         if len(missing_adj_idx)!=0:
-            missing_adj_neighbors=sample_neighbors(self.adj_list,[unique_nodes_list[i] for i in missing_adj_idx],self.restart_prob,self.num_walks,'adj')
+            missing_adj_neighbors=sample_neighbors(adj_list,[unique_nodes_list[i] for i in missing_adj_idx],self.restart_prob,self.num_walks,'adj')
             for idx,missing_adj_neighbor in zip(missing_adj_idx,missing_adj_neighbors):
                 adj_neighbors[idx]=missing_adj_neighbor
         if len(missing_dis_idx)!=0:
-            missing_dis_neighbors=sample_neighbors(self.dis_list,[unique_nodes_list[i] for i in missing_dis_idx],self.restart_prob,self.num_walks,'dis')
+            missing_dis_neighbors=sample_neighbors(dis_list,[unique_nodes_list[i] for i in missing_dis_idx],self.restart_prob,self.num_walks,'dis')
             for idx,missing_dis_neighbor in zip(missing_dis_idx,missing_dis_neighbors):
                 dis_neighbors[idx]=missing_dis_neighbor
 
@@ -535,9 +534,9 @@ class SageLayer(nn.Module):
 
 
 class GraphSage(nn.Module):
-    def __init__(self, X,  embed_dim, adj, dis, device, restart_prob, num_walks, dropout,adj_queues,dis_queues):
+    def __init__(self,   embed_dim, device, restart_prob, num_walks, dropout,adj_queues,dis_queues):
         super(GraphSage, self).__init__()
-        self.id2node = X
+        self.id2node = None
         self.device = device
         '''
         self.layer1 = SageLayer(id2feat=lambda nodes: self.id2node[nodes], adj_list=adj, dis_list=dis,
@@ -551,15 +550,14 @@ class GraphSage(nn.Module):
                                 output_dim=embed_dim, device=device, dropout=dropout,workers=workers,pool=self.pool)
         '''
 
-        self.layer2 = SageLayer(id2feat=lambda nodes: self.id2node[nodes], adj_list=adj, dis_list=dis,
+        self.layer2 = SageLayer(id2feat=lambda nodes: self.id2node[nodes],
                                 restart_prob=restart_prob, num_walks=num_walks, input_dim=X.shape[1],
                                 output_dim=embed_dim, device=device, dropout=dropout, id=2,adj_queues=adj_queues,dis_queues=dis_queues)
-        self.layer1 = SageLayer(id2feat=lambda nodes: self.layer2(nodes), adj_list=adj, dis_list=dis,
+        self.layer1 = SageLayer(id2feat=lambda nodes: self.layer2(nodes),
                                 restart_prob=restart_prob, num_walks=num_walks, input_dim=embed_dim,
                                 output_dim=embed_dim, device=device, dropout=dropout,id=1,adj_queues=adj_queues,dis_queues=dis_queues)
 
-    def forward(self, nodes):
-        feats = self.layer1(nodes)
+    def forward(self,X, nodes,adj,dis):
+        self.id2node = X
+        feats = self.layer1(nodes,adj,dis)
         return feats
-    def reset_buffer(self):
-        self.layer2.reset_buffer()

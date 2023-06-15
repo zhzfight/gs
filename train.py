@@ -161,11 +161,17 @@ def train(args):
     new_raw_Xll = np.delete(raw_Xll, newAdd_idx, axis=0)  # 删除列表中的行
     raw_Xll = np.append(new_raw_Xll, raw_Xll[newAdd_idx], axis=0)  # 添加列表中的行到末尾
     new_poi_ids2idx_dict=dict(zip(newAdd_poi,range(len(poi_ids),len(poi_ids)+len(newAdd_poi))))
+
     new_poi_idx2cat_idx_dict={}
     for idx,poi in enumerate(newAdd_poi):
-        new_poi_idx2cat_idx_dict[new_poi_ids2idx_dict[poi]]=cat_id2idx_dict[newAdd_cat[i]]
+        new_poi_idx2cat_idx_dict[new_poi_ids2idx_dict[poi]]=cat_id2idx_dict[newAdd_cat[idx]]
+
     poi_id2idx_dict.update(new_poi_ids2idx_dict)
     poi_idx2cat_idx_dict.update(new_poi_idx2cat_idx_dict)
+    Xll = np.zeros((all_num_poi, raw_Xll.shape[-1] - 1 + num_cats), dtype=np.float32)
+    Xll[:, 0] = raw_Xll[:, 0]
+    Xll[:, 1:num_cats + 1] = one_hot_rlt
+    Xll[:, num_cats + 1:] = raw_Xll[:, 2:]
 
 
     if os.path.exists(os.path.join(args.adj_path, 'all_adj.pkl')):
@@ -179,8 +185,7 @@ def train(args):
             pickle.dump(all_adj, f)  # 把字典写入pickle文件
         with open(os.path.join(args.adj_path, 'all_dis.pkl'), 'wb') as f:
             pickle.dump(all_dis, f)  # 把字典写入pickle文件
-
-
+    exit(0)
     # %% ====================== Define Dataset ======================
     class TrajectoryDatasetTrain(Dataset):
         def __init__(self, train_df):
@@ -337,9 +342,10 @@ def train(args):
     # Model1: POI embedding model
     if isinstance(X, np.ndarray):
         X = torch.from_numpy(X)
+        Xll = torch.from_numpy(Xll)
     X = X.to(device=args.device, dtype=torch.float)
-
-    poi_embed_model = GraphSage(X=X,  embed_dim=args.poi_embed_dim, adj=adj, dis=dis,
+    Xll = Xll.to(device=args.device, dtype=torch.float)
+    poi_embed_model = GraphSage(  embed_dim=args.poi_embed_dim,
                                 device=args.device, restart_prob=args.restart_prob, num_walks=args.num_walks,
                                 dropout=args.dropout, adj_queues=adj_queues, dis_queues=dis_queues)
 
@@ -381,8 +387,7 @@ def train(args):
                            weight_decay=args.weight_decay)
 
     criterion_poi = nn.CrossEntropyLoss(ignore_index=-1)  # -1 is padding
-    criterion_cat = nn.CrossEntropyLoss(ignore_index=-1)  # -1 is padding
-    criterion_time = maksed_mse_loss
+
 
     lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, 'min', verbose=True, factor=args.lr_scheduler_factor)
@@ -508,7 +513,7 @@ def train(args):
 
 
             pois = [each[0] for sample in batch for each in sample[1]]
-            poi_embeddings = poi_embed_model(torch.tensor(pois).to(args.device))
+            poi_embeddings = poi_embed_model(X,torch.tensor(pois).to(args.device),adj,dis)
             # Convert input seq to embeddings
 
             embedding_index=0
@@ -578,7 +583,7 @@ def train(args):
             train_batches_poi_loss_list.append(loss_poi.detach().cpu().numpy())
 
             # Report training progress
-            if (b_idx % (1000)) == 0:
+            if (b_idx % (100)) == 0:
                 sample_idx = 0
                 logging.info(f'Epoch:{epoch}, batch:{b_idx}, '
                              f'train_batch_loss:{loss.item():.2f}, '
@@ -596,7 +601,7 @@ def train(args):
                              f'label_seq:{batch[sample_idx][2]}\n'
                              f'pred_seq_poi:{list(np.argmax(batch_pred_pois, axis=2)[sample_idx][:batch_seq_lens[sample_idx]])} \n'+
                              '=' * 100)
-
+            break
         # train end --------------------------------------------------------------------------------------------------------
         poi_embed_model.eval()
         user_embed_model.eval()
@@ -615,7 +620,7 @@ def train(args):
         val_batches_poi_loss_list = []
         #src_mask = seq_model.generate_square_subsequent_mask(args.batch).to(args.device)
         pois = [n for n in range(all_num_poi)]
-        poi_embeddings = poi_embed_model(torch.tensor(pois).to(args.device))
+        poi_embeddings = poi_embed_model(Xll,torch.tensor(pois).to(args.device),adj,dis)
         newAdd_poi_embeddings=poi_embeddings[num_pois:]
         similarity_matrix = torch.cosine_similarity(newAdd_poi_embeddings.unsqueeze(1), poi_embeddings[:num_pois].unsqueeze(0),
                                                     dim=2)  # shape: [newAdd_num, num_poi]
