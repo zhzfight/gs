@@ -32,6 +32,11 @@ def parameter_parser():
                         type=str,
                         default='dataset/NYC/graph_A.csv',
                         help='Graph adjacent path')
+    parser.add_argument('--all-data-adj-mtx',
+                        type=str,
+                        default='dataset/NYC/graph_all.csv',
+                        help='all graph adjacent path'
+                        )
     parser.add_argument('--geo-dis',
                         type=int,
                         default=750,
@@ -47,6 +52,10 @@ def parameter_parser():
     parser.add_argument('--data-node-feats',
                         type=str,
                         default='dataset/NYC/graph_X.csv',
+                        help='Graph node features path')
+    parser.add_argument('--all-data-node-feats',
+                        type=str,
+                        default='dataset/NYC/graph_Xll.csv',
                         help='Graph node features path')
     parser.add_argument('--data-train',
                         type=str,

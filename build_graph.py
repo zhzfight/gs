@@ -148,3 +148,31 @@ if __name__ == '__main__':
     save_graph_to_pickle(G, dst_dir=dst_dir)
     save_graph_to_csv(G, dst_dir=dst_dir)
     save_graph_edgelist(G, dst_dir=dst_dir)
+
+    test_df=pd.read_csv(os.path.join(dst_dir, 'NYC_test.csv'))
+    df=pd.concat(train_df,test_df)
+    G=build_global_POI_checkin_graph(df)
+    nodelist = G.nodes()
+    A = nx.adjacency_matrix(G, nodelist=nodelist)
+    # np.save(os.path.join(dst_dir, 'adj_mtx.npy'), A.todense())
+    np.savetxt(os.path.join(dst_dir, 'graph_All.csv'), A.todense(), delimiter=',')
+
+    # Save nodes list
+    nodes_data = list(G.nodes.data())  # [(node_name, {attr1, attr2}),...]
+    with open(os.path.join(dst_dir, 'graph_Xll.csv'), 'w') as f:
+        print('node_name/poi_id,checkin_cnt,poi_catid,poi_catid_code,poi_catname,latitude,longitude', file=f)
+        for each in nodes_data:
+            node_name = each[0]
+            checkin_cnt = each[1]['checkin_cnt']
+            poi_catid = each[1]['poi_catid']
+            poi_catid_code = each[1]['poi_catid_code']
+            poi_catname = each[1]['poi_catname']
+            latitude = each[1]['latitude']
+            longitude = each[1]['longitude']
+            print(f'{node_name},{checkin_cnt},'
+                  f'{poi_catid},{poi_catid_code},{poi_catname},'
+                  f'{latitude},{longitude}', file=f)
+
+
+
+
