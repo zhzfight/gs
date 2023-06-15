@@ -579,6 +579,7 @@ def train(args):
         val_batches_poi_loss_list = []
         val_batches_cat_loss_list = []
         #src_mask = seq_model.generate_square_subsequent_mask(args.batch).to(args.device)
+        poi_embeddings = poi_embed_model(torch.tensor(pois).to(args.device))
         for vb_idx, batch in enumerate(val_loader):
             #if len(batch) != args.batch:
                 #src_mask = seq_model.generate_square_subsequent_mask(len(batch)).to(args.device)
@@ -593,8 +594,7 @@ def train(args):
             batch_seq_labels_cat = []
 
             pois = [each[0] for sample in batch for each in sample[1]]
-            poi_embeddings = poi_embed_model(torch.tensor(pois).to(args.device))
-            embedding_index=0
+
             # Convert input seq to embeddings
             for sample in batch:
                 traj_id = sample[0]
@@ -605,7 +605,7 @@ def train(args):
                 input_seq_time = [each[1] for each in sample[1]]
                 label_seq_time = [each[1] for each in sample[2]]
                 label_seq_cats = [poi_idx2cat_idx_dict[each] for each in label_seq]
-                input_seq_embed = input_traj_to_embeddings(sample, poi_embeddings,embedding_index)
+                input_seq_embed = input_traj_to_embeddings(sample, poi_embeddings)
                 batch_seq_embeds.append(input_seq_embed)
                 batch_seq_lens.append(len(input_seq))
                 batch_input_seqs.append(input_seq)
@@ -613,7 +613,6 @@ def train(args):
                 batch_label_seqs_ts.append(label_seq_ts)
                 batch_seq_labels_poi.append(torch.LongTensor(label_seq))
                 batch_seq_labels_cat.append(torch.LongTensor(label_seq_cats))
-                embedding_index+=len(input_seq)
 
 
             # Pad seqs for batch training
