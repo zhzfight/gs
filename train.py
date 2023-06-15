@@ -138,19 +138,47 @@ def train(args):
         with open(os.path.join(args.adj_path, 'dis.pkl'), 'wb') as f:
             pickle.dump(dis, f)  # 把字典写入pickle文件
 
+    all_num_poi=raw_Xll.shape[0]
+    all_nodes_df = pd.read_csv(args.all_data_node_feats)
+    new_cat_ids=list(set(all_nodes_df[args.feature2].tolist()))
+    if(len(new_cat_ids)!=len(cat_ids)):
+        print('damn the category num of train dataset not equal to the num of all dataset! you must quit')
+        exit(0)
+
+    newAdd_idx=[]
+    newAdd_poi=[]
+    newAdd_cat=[]
+    poi_ids_set=set(poi_ids)
+    all_poi_ids=all_nodes_df['node_name/poi_id'].tolist()
+    all_poi_cat=all_nodes_df['poi_catid'].tolist()
+    for i,poi_id in enumerate(all_poi_ids):
+        if poi_id not in poi_ids_set:
+            newAdd_idx.append(i)
+            newAdd_poi.append(poi_id)
+            newAdd_cat.append(all_poi_cat[i])
+    new_raw_All=np.delete(raw_All, newAdd_idx, axis=0) # 删除列表中的行
+    raw_All = np.append(new_raw_All, raw_All[newAdd_idx], axis=0)  # 添加列表中的行到末尾
+    new_raw_Xll = np.delete(raw_Xll, newAdd_idx, axis=0)  # 删除列表中的行
+    raw_Xll = np.append(new_raw_Xll, raw_Xll[newAdd_idx], axis=0)  # 添加列表中的行到末尾
+    new_poi_ids2idx_dict=dict(zip(newAdd_poi,range(len(poi_ids),len(poi_ids)+len(newAdd_poi))))
+    new_poi_idx2cat_idx_dict={}
+    for idx,poi in enumerate(newAdd_poi):
+        new_poi_idx2cat_idx_dict[new_poi_ids2idx_dict[poi]]=cat_id2idx_dict[newAdd_cat[i]]
+    poi_id2idx_dict.update(new_poi_ids2idx_dict)
+    poi_idx2cat_idx_dict.update(new_poi_idx2cat_idx_dict)
 
 
-    if os.path.exists(os.path.join(args.adj_path, 'adj.pkl')):
-        with open(os.path.join(args.adj_path, 'adj.pkl'), 'rb') as f:  # 打开pickle文件
-            adj = pickle.load(f)  # 读取字典
-        with open(os.path.join(args.adj_path, 'dis.pkl'), 'rb') as f:  # 打开pickle文件
-            dis = pickle.load(f)  # 读取字典
+    if os.path.exists(os.path.join(args.adj_path, 'all_adj.pkl')):
+        with open(os.path.join(args.adj_path, 'all_adj.pkl'), 'rb') as f:  # 打开pickle文件
+            all_adj = pickle.load(f)  # 读取字典
+        with open(os.path.join(args.adj_path, 'all_dis.pkl'), 'rb') as f:  # 打开pickle文件
+            all_dis = pickle.load(f)  # 读取字典
     else:
-        adj, dis = adj_list(raw_A, raw_X, args.geo_dis)
-        with open(os.path.join(args.adj_path, 'adj.pkl'), 'wb') as f:
-            pickle.dump(adj, f)  # 把字典写入pickle文件
-        with open(os.path.join(args.adj_path, 'dis.pkl'), 'wb') as f:
-            pickle.dump(dis, f)  # 把字典写入pickle文件
+        all_adj, all_dis = adj_list(raw_All, raw_Xll, args.geo_dis)
+        with open(os.path.join(args.adj_path, 'all_adj.pkl'), 'wb') as f:
+            pickle.dump(all_adj, f)  # 把字典写入pickle文件
+        with open(os.path.join(args.adj_path, 'all_dis.pkl'), 'wb') as f:
+            pickle.dump(all_dis, f)  # 把字典写入pickle文件
 
 
     # %% ====================== Define Dataset ======================
@@ -205,17 +233,20 @@ def train(args):
                 # Ger POIs idx in this trajectory
                 traj_df = df[df['trajectory_id'] == traj_id]
                 poi_ids = traj_df['POI_id'].to_list()
-                poi_idxs = []
+
+
                 time_feature = traj_df[args.time_feature].to_list()
                 ts = traj_df['timestamp'].to_list()
-
+                poi_idxs = [poi_id2idx_dict[each] for each in poi_ids]
+                '''
+                poi_idxs = []
                 for each in poi_ids:
                     if each in poi_id2idx_dict.keys():
                         poi_idxs.append(poi_id2idx_dict[each])
                     else:
                         # Ignore poi if not in training set
                         continue
-
+                '''
                 # Construct input seq and label seq
                 input_seq = []
                 label_seq = []
@@ -583,8 +614,12 @@ def train(args):
         val_batches_loss_list = []
         val_batches_poi_loss_list = []
         #src_mask = seq_model.generate_square_subsequent_mask(args.batch).to(args.device)
-        pois = [n for n in range(num_pois)]
+        pois = [n for n in range(all_num_poi)]
         poi_embeddings = poi_embed_model(torch.tensor(pois).to(args.device))
+        newAdd_poi_embeddings=poi_embeddings[num_pois:]
+        similarity_matrix = torch.cosine_similarity(newAdd_poi_embeddings.unsqueeze(1), poi_embeddings[:num_pois].unsqueeze(0),
+                                                    dim=2)  # shape: [newAdd_num, num_poi]
+        softmax_matrix = torch.softmax(similarity_matrix, dim=1)
         for vb_idx, batch in enumerate(val_loader):
             #if len(batch) != args.batch:
                 #src_mask = seq_model.generate_square_subsequent_mask(len(batch)).to(args.device)
@@ -624,8 +659,8 @@ def train(args):
             x = batch_padded.to(device=args.device, dtype=torch.float)
             y_poi = label_padded_poi.to(device=args.device, dtype=torch.long)
             y_pred_poi= seq_model(x,batch_seq_lens,batch_input_seqs_ts,batch_label_seqs_ts)
-
-
+            score_matrix = torch.matmul(y_pred_poi, softmax_matrix.transpose(0, 1))
+            y_pred_poi=torch.cat((y_pred_poi,score_matrix),dim=-1)
             # Calculate loss
             loss_poi = criterion_poi(y_pred_poi.transpose(1, 2), y_poi)
             loss = loss_poi
