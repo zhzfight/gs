@@ -784,7 +784,22 @@ def train(args):
                      f"val_top20_acc:{epoch_val_top20_acc:.4f}, "
                      f"val_mAP20:{epoch_val_mAP20:.4f}, "
                      f"val_mrr:{epoch_val_mrr:.4f}")
-
+        # Save poi and user embeddings
+        if args.save_embeds:
+            embeddings_save_dir = os.path.join(args.save_dir, 'embeddings')
+            if not os.path.exists(embeddings_save_dir): os.makedirs(embeddings_save_dir)
+            # Save best epoch embeddings
+            if monitor_score >= max_val_score:
+                # Save poi embeddings
+                pois = [n for n in range(all_num_poi)]
+                poi_embed_model.setup(Xll, all_adj, all_dis)
+                poi_embeddings = poi_embed_model(torch.tensor(pois).to(args.device)).detach().cpu().numpy()
+                poi_embedding_list = []
+                for poi_idx in range(len(poi_id2idx_dict)):
+                    poi_embedding = poi_embeddings[poi_idx]
+                    poi_embedding_list.append(poi_embedding)
+                save_poi_embeddings = np.array(poi_embedding_list)
+                np.save(os.path.join(embeddings_save_dir, 'saved_poi_embeddings'), save_poi_embeddings)
         # Save train/val metrics for plotting purpose
         with open(os.path.join(args.save_dir, 'metrics-train.txt'), "w") as f:
             print(f'train_epochs_loss_list={[float(f"{each:.4f}") for each in train_epochs_loss_list]}', file=f)

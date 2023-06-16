@@ -282,6 +282,7 @@ class TimeAwareTransformer(nn.Module):
         self.norm22 = nn.LayerNorm(nhid)
 
         self.init_weights()
+        self.white_board=nn.Parameter(torch.FloatTensor(nhid))
 
     def init_weights(self):
         initrange = 0.1
@@ -393,6 +394,8 @@ class TimeAwareTransformer(nn.Module):
                                  decoder_output_poi.shape[3]).to(self.device)
         for i in range(decoder_output_poi.shape[1]):
             pooled_poi[:, i] = torch.mean(decoder_output_poi[:, i, :i + 1], dim=1)
+
+
 
         return pooled_poi
 
