@@ -1,4 +1,5 @@
 """ Build the user-agnostic global trajectory flow map from the sequence data """
+import collections
 import os
 import pickle
 
@@ -139,21 +140,43 @@ def print_graph_statisics(G):
 if __name__ == '__main__':
     dst_dir = r'dataset/NYC'
 
-    # Build POI checkin trajectory graph
+    # some dirty work
     train_df = pd.read_csv(os.path.join(dst_dir, 'NYC_train.csv'))
+    val_df = pd.read_csv(os.path.join(dst_dir, 'NYC_val.csv'))
+    df = pd.concat([train_df, val_df])
+
+    lookup=collections.defaultdict(dict)
+    for i,row in df.iterrows():
+        if row['POI_catid'] not in lookup[row['POI_id'] ]:
+            lookup[row['POI_id']][row['POI_catid']] = 1
+        else:
+            lookup[row['POI_id'] ][row['POI_catid']]+=1
+    ament={}
+    for poiid,catids in lookup.items():
+        if len(catids)>1:
+            max_key = max(catids, key=catids.get)
+            ament[poiid]=max_key
+
+
+    def update_catid(row):
+        poiid = row['POI_id']
+        if poiid in ament:
+            return ament[poiid]
+        else:
+            return row['POI_catid']
+    train_df['POI_catid']=train_df.apply(update_catid,axis=1)
+    df['POI_catid'] = df.apply(update_catid,axis=1)
+
+
     print('Build global POI checkin graph -----------------------------------')
     G = build_global_POI_checkin_graph(train_df)
-
     # Save graph to disk
     save_graph_to_pickle(G, dst_dir=dst_dir)
     save_graph_to_csv(G, dst_dir=dst_dir)
     save_graph_edgelist(G, dst_dir=dst_dir)
 
 
-    cat_ids=set(train_df['POI_catid'].to_list())
-    val_df=pd.read_csv(os.path.join(dst_dir, 'NYC_val.csv'))
-    val_df = val_df[val_df['POI_catid'].isin(cat_ids)]
-    df=pd.concat([train_df, val_df])
+
     G=build_global_POI_checkin_graph(df)
     nodelist = G.nodes()
     A = nx.adjacency_matrix(G, nodelist=nodelist)
@@ -161,6 +184,7 @@ if __name__ == '__main__':
     np.savetxt(os.path.join(dst_dir, 'graph_All.csv'), A.todense(), delimiter=',')
 
     # Save nodes list
+
     nodes_data = list(G.nodes.data())  # [(node_name, {attr1, attr2}),...]
     with open(os.path.join(dst_dir, 'graph_Xll.csv'), 'w') as f:
         print('node_name/poi_id,checkin_cnt,poi_catid,poi_catid_code,poi_catname,latitude,longitude', file=f)
@@ -175,9 +199,6 @@ if __name__ == '__main__':
             print(f'{node_name},{checkin_cnt},'
                   f'{poi_catid},{poi_catid_code},{poi_catname},'
                   f'{latitude},{longitude}', file=f)
-    all_nodes_df = pd.read_csv('dataset/NYC/graph_Xll.csv')
-    new_cat_ids = list(set(all_nodes_df['poi_catid'].tolist()))
-    print('fuck')
 
 
 

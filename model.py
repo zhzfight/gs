@@ -68,8 +68,8 @@ class GraphConvolution(nn.Module):
 
     def __repr__(self):
         return self.__class__.__name__ + ' (' \
-               + str(self.in_features) + ' -> ' \
-               + str(self.out_features) + ')'
+            + str(self.in_features) + ' -> ' \
+            + str(self.out_features) + ')'
 
 
 class GCN(nn.Module):
@@ -205,7 +205,7 @@ class PositionalEncoding(nn.Module):
 
 
 class TransformerModel(nn.Module):
-    def __init__(self, num_poi, num_cat, embed_size, nhead, nhid, nlayers,device, dropout=0.5):
+    def __init__(self, num_poi, num_cat, embed_size, nhead, nhid, nlayers, device, dropout=0.5):
         super(TransformerModel, self).__init__()
         from torch.nn import TransformerEncoder, TransformerEncoderLayer
         self.model_type = 'Transformer'
@@ -213,7 +213,7 @@ class TransformerModel(nn.Module):
         encoder_layers = TransformerEncoderLayer(embed_size, nhead, nhid, dropout)
         self.transformer_encoder = TransformerEncoder(encoder_layers, nlayers)
         # self.encoder = nn.Embedding(num_poi, embed_size)
-        self.device=device
+        self.device = device
         self.embed_size = embed_size
         self.decoder_poi = nn.Linear(embed_size, num_poi)
         self.decoder_cat = nn.Linear(embed_size, num_cat)
@@ -230,38 +230,37 @@ class TransformerModel(nn.Module):
         self.decoder_poi.weight.data.uniform_(-initrange, initrange)
 
     def forward(self, src):
-        src_mask=self.generate_square_subsequent_mask(src.shape[1]).to(self.device)
-        src=torch.transpose(src,1,0)
+        src_mask = self.generate_square_subsequent_mask(src.shape[1]).to(self.device)
+        src = torch.transpose(src, 1, 0)
         src = src * math.sqrt(self.embed_size)
         src = self.pos_encoder(src)
         x = self.transformer_encoder(src, src_mask)
-        x=torch.transpose(x,1,0)
+        x = torch.transpose(x, 1, 0)
         out_poi = self.decoder_poi(x)
         out_cat = self.decoder_cat(x)
-        return out_poi,  out_cat
+        return out_poi, out_cat
 
 
 class TimeAwareTransformer(nn.Module):
-    def __init__(self, num_poi, num_cat, nhid,batch_size, device,dropout):
+    def __init__(self, num_poi, num_cat, nhid, batch_size, device, dropout):
         super(TimeAwareTransformer, self).__init__()
 
-
-        self.device=device
-        self.nhid=nhid
-        self.batch_size=batch_size
+        self.device = device
+        self.nhid = nhid
+        self.batch_size = batch_size
         # self.encoder = nn.Embedding(num_poi, embed_size)
 
         self.decoder_poi = nn.Linear(nhid, num_poi)
-        self.tu=24*3600
-        self.time_bin=3600
-        assert (self.tu)%self.time_bin==0
-        self.day_embedding=nn.Embedding(8,nhid,padding_idx=0)
-        self.hour_embedding=nn.Embedding(int((self.tu)/self.time_bin)+2,nhid,padding_idx=0)
+        self.tu = 24 * 3600
+        self.time_bin = 3600
+        assert (self.tu) % self.time_bin == 0
+        self.day_embedding = nn.Embedding(8, nhid, padding_idx=0)
+        self.hour_embedding = nn.Embedding(int((self.tu) / self.time_bin) + 2, nhid, padding_idx=0)
 
-        self.W1_Q=nn.Linear(nhid,nhid)
-        self.W1_K=nn.Linear(nhid,nhid)
-        self.W1_V=nn.Linear(nhid,nhid)
-        self.norm11=nn.LayerNorm(nhid)
+        self.W1_Q = nn.Linear(nhid, nhid)
+        self.W1_K = nn.Linear(nhid, nhid)
+        self.W1_V = nn.Linear(nhid, nhid)
+        self.norm11 = nn.LayerNorm(nhid)
         self.feedforward1 = nn.Sequential(
             nn.Linear(nhid, nhid),
             nn.ReLU(),
@@ -270,10 +269,10 @@ class TimeAwareTransformer(nn.Module):
         )
         self.norm12 = nn.LayerNorm(nhid)
 
-        self.W2_Q=nn.Linear(nhid,nhid)
-        self.W2_K=nn.Linear(nhid,nhid)
+        self.W2_Q = nn.Linear(nhid, nhid)
+        self.W2_K = nn.Linear(nhid, nhid)
         self.W2_V = nn.Linear(nhid, nhid)
-        self.norm21=nn.LayerNorm(nhid)
+        self.norm21 = nn.LayerNorm(nhid)
         self.feedforward2 = nn.Sequential(
             nn.Linear(nhid, nhid),
             nn.ReLU(),
@@ -282,34 +281,30 @@ class TimeAwareTransformer(nn.Module):
         )
         self.norm22 = nn.LayerNorm(nhid)
 
-
-
         self.init_weights()
-
-
-
 
     def init_weights(self):
         initrange = 0.1
         self.decoder_poi.bias.data.zero_()
         self.decoder_poi.weight.data.uniform_(-initrange, initrange)
 
-    def forward(self, src,batch_seq_lens,batch_input_seqs_ts,batch_label_seqs_ts):
-        hourInterval=torch.zeros((src.shape[0],src.shape[1],src.shape[1]),dtype=torch.long).to(self.device)
-        dayInterval=torch.zeros((src.shape[0],src.shape[1],src.shape[1]),dtype=torch.long).to(self.device)
+    def forward(self, src, batch_seq_lens, batch_input_seqs_ts, batch_label_seqs_ts):
+        hourInterval = torch.zeros((src.shape[0], src.shape[1], src.shape[1]), dtype=torch.long).to(self.device)
+        dayInterval = torch.zeros((src.shape[0], src.shape[1], src.shape[1]), dtype=torch.long).to(self.device)
 
-        label_hourInterval=torch.zeros((src.shape[0],src.shape[1],src.shape[1]),dtype=torch.long).to(self.device)
-        label_dayInterval=torch.zeros((src.shape[0],src.shape[1],src.shape[1]),dtype=torch.long).to(self.device)
+        label_hourInterval = torch.zeros((src.shape[0], src.shape[1], src.shape[1]), dtype=torch.long).to(self.device)
+        label_dayInterval = torch.zeros((src.shape[0], src.shape[1], src.shape[1]), dtype=torch.long).to(self.device)
         for i in range(src.shape[0]):
             for j in range(batch_seq_lens[i]):
-                for k in range(j+1):
-                    if i==j:
-                        hourInterval[i][j][k]=1
+                for k in range(j + 1):
+                    if i == j:
+                        hourInterval[i][j][k] = 1
                     else:
-                        hourInterval[i][j][k]=int(((batch_input_seqs_ts[i][j]-batch_input_seqs_ts[i][k])%(self.tu))/self.time_bin)+2
-                    dayInterval[i][j][k]=int((batch_input_seqs_ts[i][j]-batch_input_seqs_ts[i][k])/(self.tu))+1
-                    if dayInterval[i][j][k]>6:
-                        dayInterval[i][j][k]=7
+                        hourInterval[i][j][k] = int(
+                            ((batch_input_seqs_ts[i][j] - batch_input_seqs_ts[i][k]) % (self.tu)) / self.time_bin) + 2
+                    dayInterval[i][j][k] = int((batch_input_seqs_ts[i][j] - batch_input_seqs_ts[i][k]) / (self.tu)) + 1
+                    if dayInterval[i][j][k] > 6:
+                        dayInterval[i][j][k] = 7
                     label_hourInterval[i][j][k] = int(
                         ((batch_label_seqs_ts[i][j] - batch_input_seqs_ts[i][k]) % (self.tu)) / self.time_bin) + 2
                     label_dayInterval[i][j][k] = int(
@@ -317,14 +312,11 @@ class TimeAwareTransformer(nn.Module):
                     if label_dayInterval[i][j][k] > 6:
                         label_dayInterval[i][j][k] = 7
 
+        hourInterval_embedding = self.hour_embedding(hourInterval)
+        dayInterval_embedding = self.day_embedding(dayInterval)
 
-
-
-        hourInterval_embedding=self.hour_embedding(hourInterval)
-        dayInterval_embedding=self.day_embedding(dayInterval)
-
-        label_hourInterval_embedding=self.hour_embedding(label_hourInterval)
-        label_dayInterval_embedding=self.day_embedding(label_dayInterval)
+        label_hourInterval_embedding = self.hour_embedding(label_hourInterval)
+        label_dayInterval_embedding = self.day_embedding(label_dayInterval)
 
         # mask attn
         attn_mask = ~torch.tril(torch.ones((src.shape[1], src.shape[1]), dtype=torch.bool, device=self.device))
@@ -335,32 +327,30 @@ class TimeAwareTransformer(nn.Module):
         attn_mask = attn_mask.unsqueeze(0).expand(src.shape[0], -1, -1)
         time_mask = time_mask.unsqueeze(-1).expand(-1, -1, src.shape[1])
 
-        Q=self.W1_Q(src)
-        K=self.W1_K(src)
-        V=self.W1_V(src)
+        Q = self.W1_Q(src)
+        K = self.W1_K(src)
+        V = self.W1_V(src)
 
-        attn_weight=Q.matmul(torch.transpose(K,1,2))
-        attn_weight+=hourInterval_embedding.matmul(Q.unsqueeze(-1)).squeeze(-1)
-        attn_weight+=dayInterval_embedding.matmul(Q.unsqueeze(-1)).squeeze(-1)
+        attn_weight = Q.matmul(torch.transpose(K, 1, 2))
+        attn_weight += hourInterval_embedding.matmul(Q.unsqueeze(-1)).squeeze(-1)
+        attn_weight += dayInterval_embedding.matmul(Q.unsqueeze(-1)).squeeze(-1)
 
-        attn_weight=attn_weight/math.sqrt(self.nhid)
+        attn_weight = attn_weight / math.sqrt(self.nhid)
 
         paddings = torch.ones(attn_weight.shape) * (-2 ** 32 + 1)
-        paddings=paddings.to(self.device)
+        paddings = paddings.to(self.device)
 
-        attn_weight=torch.where(time_mask,paddings,attn_weight)
-        attn_weight=torch.where(attn_mask,paddings,attn_weight)
+        attn_weight = torch.where(time_mask, paddings, attn_weight)
+        attn_weight = torch.where(attn_mask, paddings, attn_weight)
 
+        attn_weight = F.softmax(attn_weight, dim=-1)
+        x = attn_weight.matmul(V)  # B,L,D
+        x += torch.matmul(attn_weight.unsqueeze(2), hourInterval_embedding).squeeze(2)
+        x += torch.matmul(attn_weight.unsqueeze(2), dayInterval_embedding).squeeze(2)
 
-        attn_weight=F.softmax(attn_weight,dim=-1)
-        x=attn_weight.matmul(V) #B,L,D
-        x+=torch.matmul(attn_weight.unsqueeze(2),hourInterval_embedding).squeeze(2)
-        x+=torch.matmul(attn_weight.unsqueeze(2),dayInterval_embedding).squeeze(2)
-
-
-        x=self.norm11(x+src)
-        ffn_output=self.feedforward1(x)
-        ffn_output=self.norm12(x+ffn_output)
+        x = self.norm11(x + src)
+        ffn_output = self.feedforward1(x)
+        ffn_output = self.norm12(x + ffn_output)
         '''
 
         src=ffn_output
@@ -389,21 +379,24 @@ class TimeAwareTransformer(nn.Module):
         ffn_output = self.norm22(x + ffn_output)
         '''
 
-        #attn_mask=attn_mask.unsqueeze(-1).expand(-1,-1,-1,ffn_output.shape[-1])
-        ffn_output=ffn_output.unsqueeze(2).repeat(1,1,ffn_output.shape[1],1).transpose(2,1)
-        ffn_output=torch.add(ffn_output,label_hourInterval_embedding)
-        ffn_output=torch.add(ffn_output,label_dayInterval_embedding)
+        # attn_mask=attn_mask.unsqueeze(-1).expand(-1,-1,-1,ffn_output.shape[-1])
+        ffn_output = ffn_output.unsqueeze(2).repeat(1, 1, ffn_output.shape[1], 1).transpose(2, 1)
+        ffn_output = torch.add(ffn_output, label_hourInterval_embedding)
+        ffn_output = torch.add(ffn_output, label_dayInterval_embedding)
         '''
         paddings = torch.ones(ffn_output.shape) * (-2 ** 32 + 1)
         paddings = paddings.to(self.device)
         ffn_output = torch.where(attn_mask, paddings, ffn_output)
         '''
         decoder_output_poi = self.decoder_poi(ffn_output)
-        pooled_poi=torch.zeros(decoder_output_poi.shape[0],decoder_output_poi.shape[1],decoder_output_poi.shape[3]).to(self.device)
+        pooled_poi = torch.zeros(decoder_output_poi.shape[0], decoder_output_poi.shape[1],
+                                 decoder_output_poi.shape[3]).to(self.device)
         for i in range(decoder_output_poi.shape[1]):
-            pooled_poi[:,i]=torch.mean(decoder_output_poi[:,i,:i+1],dim=1)
+            pooled_poi[:, i] = torch.mean(decoder_output_poi[:, i, :i + 1], dim=1)
 
         return pooled_poi
+
+
 class MeanAggregator(nn.Module):
     """
     Aggregates a node's embeddings using mean of neighbors' embeddings and transform
@@ -451,25 +444,28 @@ class SageLayer(nn.Module):
     gcn --- whether to perform concatenation GraphSAGE-style, or add self-loops GCN-style
     """
 
-    def __init__(self, id2feat,  restart_prob, num_walks, input_dim, output_dim, device, dropout,
-                 id,adj_queues,dis_queues):
+    def __init__(self, id2feat, restart_prob, num_walks, input_dim, output_dim, device, dropout,
+                 id, adj_queues, dis_queues, all_adj_queues, all_dis_queues):
         super(SageLayer, self).__init__()
         self.id2feat = id2feat
         self.dis_agg = MeanAggregator(self.id2feat, device)
         self.adj_agg = MeanAggregator(self.id2feat, device)
         self.device = device
-
+        self.adj_list = None
+        self.dis_list = None
         self.restart_prob = restart_prob
         self.num_walks = num_walks
         self.leakyRelu = nn.LeakyReLU(0.2)
         self.dropout = dropout
-        self.adj_queues=adj_queues
-        self.dis_queues=dis_queues
-        self.id=id
+        self.adj_queues = adj_queues
+        self.dis_queues = dis_queues
+        self.all_adj_queues = all_adj_queues
+        self.all_dis_queues = all_dis_queues
+        self.id = id
         self.W_self = nn.Linear(input_dim, int(output_dim / 3), bias=False)
         self.W_adj = nn.Linear(input_dim, int(output_dim / 3), bias=False)
         self.W_dis = nn.Linear(input_dim, int(output_dim / 3), bias=False)
-        self.WC=nn.Linear(output_dim,output_dim)
+        self.WC = nn.Linear(output_dim, output_dim)
         self.bias = nn.Parameter(torch.FloatTensor(output_dim))
         self.init_weights()
 
@@ -480,7 +476,7 @@ class SageLayer(nn.Module):
         self.W_dis.weight.data.uniform_(-initrange, initrange)
         self.bias.data.zero_()
 
-    def forward(self, nodes,adj_list,dis_list):
+    def forward(self, nodes):
         """
         Generates embeddings for a batch of nodes.
         nodes     -- list of nodes
@@ -489,30 +485,38 @@ class SageLayer(nn.Module):
         unique_nodes_list = list(set([int(node) for node in nodes]))
         unique_nodes = {n: i for i, n in enumerate(unique_nodes_list)}
 
-        adj_neighbors=[[] for _ in unique_nodes_list]
-        dis_neighbors=[[] for _ in unique_nodes_list]
-        missing_adj_idx=[]
-        missing_dis_idx=[]
-        for idx,node in enumerate(unique_nodes_list):
+        adj_neighbors = [[] for _ in unique_nodes_list]
+        dis_neighbors = [[] for _ in unique_nodes_list]
+        missing_adj_idx = []
+        missing_dis_idx = []
+        for idx, node in enumerate(unique_nodes_list):
             try:
-                random_walk=self.adj_queues[node].get_nowait()
-                adj_neighbors[idx]=random_walk
+                if self.training:
+                    random_walk = self.adj_queues[node].get_nowait()
+                else:
+                    random_walk = self.all_adj_queues[node].get_nowait()
+                adj_neighbors[idx] = random_walk
             except queue.Empty:
                 missing_adj_idx.append(idx)
             try:
-                random_walk=self.dis_queues[node].get_nowait()
-                dis_neighbors[idx]=random_walk
+                if self.training:
+                    random_walk = self.dis_queues[node].get_nowait()
+                else:
+                    random_walk = self.all_dis_queues[node].get_nowait()
+                dis_neighbors[idx] = random_walk
             except queue.Empty:
                 missing_dis_idx.append(idx)
 
-        if len(missing_adj_idx)!=0:
-            missing_adj_neighbors=sample_neighbors(adj_list,[unique_nodes_list[i] for i in missing_adj_idx],self.restart_prob,self.num_walks,'adj')
-            for idx,missing_adj_neighbor in zip(missing_adj_idx,missing_adj_neighbors):
-                adj_neighbors[idx]=missing_adj_neighbor
-        if len(missing_dis_idx)!=0:
-            missing_dis_neighbors=sample_neighbors(dis_list,[unique_nodes_list[i] for i in missing_dis_idx],self.restart_prob,self.num_walks,'dis')
-            for idx,missing_dis_neighbor in zip(missing_dis_idx,missing_dis_neighbors):
-                dis_neighbors[idx]=missing_dis_neighbor
+        if len(missing_adj_idx) != 0:
+            missing_adj_neighbors = sample_neighbors(self.adj_list, [unique_nodes_list[i] for i in missing_adj_idx],
+                                                     self.restart_prob, self.num_walks, 'adj')
+            for idx, missing_adj_neighbor in zip(missing_adj_idx, missing_adj_neighbors):
+                adj_neighbors[idx] = missing_adj_neighbor
+        if len(missing_dis_idx) != 0:
+            missing_dis_neighbors = sample_neighbors(self.dis_list, [unique_nodes_list[i] for i in missing_dis_idx],
+                                                     self.restart_prob, self.num_walks, 'dis')
+            for idx, missing_dis_neighbor in zip(missing_dis_idx, missing_dis_neighbors):
+                dis_neighbors[idx] = missing_dis_neighbor
 
         self_feats = self.id2feat(torch.tensor(unique_nodes_list).to(self.device))
         adj_feats = self.adj_agg(adj_neighbors)
@@ -523,18 +527,23 @@ class SageLayer(nn.Module):
         self_feats = F.dropout(self_feats, p=self.dropout, training=self.training)
         dis_feats = self.W_dis(dis_feats)
         feats = torch.cat((self_feats, adj_feats, dis_feats), dim=-1) + self.bias
-        feats=self.WC(feats)
+        feats = self.WC(feats)
         feats = self.leakyRelu(feats)
         feats = F.normalize(feats, p=2, dim=-1)
 
-        nodes_idx=[unique_nodes[int(node)] for node in nodes]
-        res=feats[nodes_idx]
+        nodes_idx = [unique_nodes[int(node)] for node in nodes]
+        res = feats[nodes_idx]
 
         return res
 
+    def set_adj(self, adj, dis):
+        self.adj_list = adj
+        self.dis_list = dis
+
 
 class GraphSage(nn.Module):
-    def __init__(self,   embed_dim, device, restart_prob, num_walks, dropout,adj_queues,dis_queues):
+    def __init__(self, input_dim, embed_dim, device, restart_prob, num_walks, dropout, adj_queues, dis_queues,
+                 all_adj_queues, all_dis_queues):
         super(GraphSage, self).__init__()
         self.id2node = None
         self.device = device
@@ -551,13 +560,19 @@ class GraphSage(nn.Module):
         '''
 
         self.layer2 = SageLayer(id2feat=lambda nodes: self.id2node[nodes],
-                                restart_prob=restart_prob, num_walks=num_walks, input_dim=X.shape[1],
-                                output_dim=embed_dim, device=device, dropout=dropout, id=2,adj_queues=adj_queues,dis_queues=dis_queues)
+                                restart_prob=restart_prob, num_walks=num_walks, input_dim=input_dim,
+                                output_dim=embed_dim, device=device, dropout=dropout, id=2, adj_queues=adj_queues,
+                                dis_queues=dis_queues, all_adj_queues=all_adj_queues, all_dis_queues=all_dis_queues)
         self.layer1 = SageLayer(id2feat=lambda nodes: self.layer2(nodes),
                                 restart_prob=restart_prob, num_walks=num_walks, input_dim=embed_dim,
-                                output_dim=embed_dim, device=device, dropout=dropout,id=1,adj_queues=adj_queues,dis_queues=dis_queues)
+                                output_dim=embed_dim, device=device, dropout=dropout, id=1, adj_queues=adj_queues,
+                                dis_queues=dis_queues, all_adj_queues=all_adj_queues, all_dis_queues=all_dis_queues)
 
-    def forward(self,X, nodes,adj,dis):
-        self.id2node = X
-        feats = self.layer1(nodes,adj,dis)
+    def forward(self, nodes):
+        feats = self.layer1(nodes)
         return feats
+
+    def setup(self, X, adj, dis):
+        self.id2node = X
+        self.layer1.set_adj(adj, dis)
+        self.layer2.set_adj(adj, dis)
